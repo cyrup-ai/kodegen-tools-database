@@ -1,0 +1,87 @@
+[package]
+name = "kodegen_tools_database"
+version = "0.1.0"
+edition = "2024"
+description = "KODEGEN.ᴀɪ: Memory-efficient, Blazing-Fast, MCP tools for code generation agents."
+authors = ["KODEGEN.ᴀɪ"]
+homepage = "https://kodegen.ai"
+repository = "https://github.com/cyrup-ai/kodegen-tools-database"
+readme = "README.md"
+categories = ["development-tools", "command-line-utilities", "api-bindings"]
+keywords = [
+    "mcp",
+    "terminal",
+    "agent",
+    "filesystem",
+    "claude"
+]
+license = "Apache-2.0 OR MIT"
+
+[dependencies]
+# Core kodegen
+kodegen_mcp_tool = { version = "0.1" }
+kodegen_mcp_schema = { version = "0.1" }
+kodegen_tools_config = { version = "0.1" }
+kodegen_server_http = { version = "0.1" }
+
+# Security - secret value wrapper for passwords/credentials
+secrecy = "0.10"
+
+# Database (async, multi-database support)
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "any", "postgres", "mysql", "sqlite"] }
+
+# SSH tunneling
+ssh2 = "0.9"
+openssl-sys = { version = "0.9", features = ["vendored"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "1"
+
+# MCP SDK - for rmcp types
+rmcp = { version = "0.8", features = ["server"]}
+
+# Logging
+log = "0.4"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Utilities
+url = "2"
+regex = "1"
+lazy-regex = "3"
+base64 = "0.22"
+sqlparser = "0.59"
+rand = "0.9"
+
+
+[dev-dependencies]
+kodegen_mcp_client = { version = "0.1"  }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+[features]
+default = ["postgres", "mysql", "sqlite"]
+postgres = ["sqlx/postgres"]
+mysql = ["sqlx/mysql"]
+mariadb = ["sqlx/mysql"]
+sqlite = ["sqlx/sqlite"]
+# Note: sqlx 0.8 does not support SQL Server (mssql feature removed)
+# sqlserver support may be added in future sqlx versions
+all = ["postgres", "mysql", "mariadb", "sqlite"]
+
+[lib]
+name = "kodegen_tools_database"
+path = "src/lib.rs"
+
+[[bin]]
+name = "kodegen-database"
+path = "src/main.rs"
