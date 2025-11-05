@@ -130,8 +130,9 @@ fn parse_ssh_config_from_env() -> Result<Option<(
 #[tokio::main]
 async fn main() -> Result<()> {
     run_http_server("database", |config, _tracker| {
-        async move {
-            let mut tool_router = ToolRouter::new();
+        let config = config.clone();
+        Box::pin(async move {
+        let mut tool_router = ToolRouter::new();
         let mut prompt_router = PromptRouter::new();
         let mut managers = Managers::new();
 
@@ -143,7 +144,7 @@ async fn main() -> Result<()> {
         let ssh_config = parse_ssh_config_from_env()?;
 
         // Setup database connection pool (with optional SSH tunnel)
-        let db_connection = kodegen_tools_database::setup_database_pool(config, &dsn, ssh_config).await?;
+        let db_connection = kodegen_tools_database::setup_database_pool(&config, &dsn, ssh_config).await?;
 
         // Register SSH tunnel for graceful shutdown if present
         if db_connection.tunnel.is_some() {
@@ -200,7 +201,7 @@ async fn main() -> Result<()> {
         );
 
         Ok(RouterSet::new(tool_router, prompt_router, managers))
-        }
+        })
     })
     .await
 }
