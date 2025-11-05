@@ -134,7 +134,7 @@ async fn main() -> Result<()> {
         Box::pin(async move {
         let mut tool_router = ToolRouter::new();
         let mut prompt_router = PromptRouter::new();
-        let mut managers = Managers::new();
+        let managers = Managers::new();
 
         // Get DATABASE_DSN from environment (required)
         let dsn = std::env::var("DATABASE_DSN")
@@ -149,7 +149,7 @@ async fn main() -> Result<()> {
         // Register SSH tunnel for graceful shutdown if present
         if db_connection.tunnel.is_some() {
             let tunnel_guard = Arc::new(Mutex::new(db_connection.tunnel));
-            managers.register(TunnelGuard(tunnel_guard));
+            managers.register(TunnelGuard(tunnel_guard)).await;
         }
 
         // Register all 7 database tools
