@@ -7,7 +7,7 @@ use crate::{
 };
 use super::row_converter::row_to_json;
 use kodegen_mcp_tool::error::McpError;
-use kodegen_tools_config::ConfigManager;
+use kodegen_config_manager::ConfigManager;
 use serde_json::{Value, json};
 use sqlx::AnyPool;
 use std::sync::Arc;
@@ -125,7 +125,7 @@ impl ExecuteSQLTool {
                 .config
                 .get_value("db_query_timeout_secs")
                 .and_then(|v| match v {
-                    kodegen_tools_config::ConfigValue::Number(n) => {
+                    kodegen_config_manager::ConfigValue::Number(n) => {
                         Some(Duration::from_secs(n as u64))
                     }
                     _ => None,
@@ -178,7 +178,7 @@ impl ExecuteSQLTool {
             .config
             .get_value("db_query_timeout_secs")
             .and_then(|v| match v {
-                kodegen_tools_config::ConfigValue::Number(n) => Some(Duration::from_secs(n as u64)),
+                kodegen_config_manager::ConfigValue::Number(n) => Some(Duration::from_secs(n as u64)),
                 _ => None,
             })
             .unwrap_or(Duration::from_secs(30));

@@ -2,7 +2,7 @@
 
 use crate::error::DatabaseError;
 use kodegen_mcp_tool::error::McpError;
-use kodegen_tools_config::ConfigManager;
+use kodegen_config_manager::ConfigManager;
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -41,7 +41,7 @@ fn calculate_backoff(config: &ConfigManager, attempt: u32) -> Duration {
     let base_backoff_ms = config
         .get_value("db_retry_backoff_ms")
         .and_then(|v| match v {
-            kodegen_tools_config::ConfigValue::Number(n) => Some(n as u64),
+            kodegen_config_manager::ConfigValue::Number(n) => Some(n as u64),
             _ => None,
         })
         .unwrap_or(500); // Default 500ms, not 100ms
@@ -49,7 +49,7 @@ fn calculate_backoff(config: &ConfigManager, attempt: u32) -> Duration {
     let max_backoff_ms = config
         .get_value("db_max_backoff_ms")
         .and_then(|v| match v {
-            kodegen_tools_config::ConfigValue::Number(n) => Some(n as u64),
+            kodegen_config_manager::ConfigValue::Number(n) => Some(n as u64),
             _ => None,
         })
         .unwrap_or(5000); // Default 5 seconds cap
@@ -85,7 +85,7 @@ fn calculate_backoff(config: &ConfigManager, attempt: u32) -> Duration {
 ///
 /// ```rust
 /// # use kodegen_tools_database::tools::timeout::execute_with_timeout;
-/// # use kodegen_tools_config::ConfigManager;
+/// # use kodegen_config_manager::ConfigManager;
 /// # use std::time::Duration;
 /// # async fn example() -> Result<(), kodegen_mcp_tool::error::McpError> {
 /// # let config_manager = ConfigManager::new();
@@ -115,7 +115,7 @@ where
     let timeout_duration = config
         .get_value(config_key)
         .and_then(|v| match v {
-            kodegen_tools_config::ConfigValue::Number(n) => Some(Duration::from_secs(n as u64)),
+            kodegen_config_manager::ConfigValue::Number(n) => Some(Duration::from_secs(n as u64)),
             _ => None,
         })
         .unwrap_or(default_timeout);
@@ -123,7 +123,7 @@ where
     let max_retries = config
         .get_value("db_max_retries")
         .and_then(|v| match v {
-            kodegen_tools_config::ConfigValue::Number(n) => Some(n as u32),
+            kodegen_config_manager::ConfigValue::Number(n) => Some(n as u32),
             _ => None,
         })
         .unwrap_or(2); // Retry twice by default (3 total attempts)

@@ -4,7 +4,7 @@ use crate::error::DatabaseError;
 use crate::schema_queries::get_default_schema;
 use crate::tools::timeout::execute_with_timeout;
 use crate::types::DatabaseType;
-use kodegen_tools_config::ConfigManager;
+use kodegen_config_manager::ConfigManager;
 use sqlx::{AnyPool, Row};
 use std::time::Duration;
 
@@ -29,7 +29,7 @@ use std::time::Duration;
 /// ```rust,no_run
 /// use kodegen_tools_database::tools::helpers::resolve_schema_default;
 /// use kodegen_tools_database::types::DatabaseType;
-/// use kodegen_tools_config::ConfigManager;
+/// use kodegen_config_manager::ConfigManager;
 /// use sqlx::AnyPool;
 ///
 /// # async fn example(pool: &AnyPool, config: &ConfigManager) -> Result<(), Box<dyn std::error::Error>> {

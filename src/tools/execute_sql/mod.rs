@@ -65,13 +65,13 @@ impl Tool for ExecuteSQLTool {
             .config
             .get_value("readonly")
             .and_then(|v| match v {
-                kodegen_tools_config::ConfigValue::Boolean(b) => Some(b),
+                kodegen_config_manager::ConfigValue::Boolean(b) => Some(b),
                 _ => None,
             })
             .unwrap_or(false);
 
         let max_rows = self.config.get_value("max_rows").and_then(|v| match v {
-            kodegen_tools_config::ConfigValue::Number(n) => Some(n as usize),
+            kodegen_config_manager::ConfigValue::Number(n) => Some(n as usize),
             _ => None,
         });
 

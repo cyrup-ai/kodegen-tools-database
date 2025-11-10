@@ -7,7 +7,7 @@ use crate::tools::timeout::execute_with_timeout;
 use crate::types::{DatabaseType, TableColumn};
 use kodegen_mcp_tool::{Tool, error::McpError};
 use kodegen_mcp_schema::database::{GetTableSchemaArgs, GetTableSchemaPromptArgs};
-use kodegen_tools_config::ConfigManager;
+use kodegen_config_manager::ConfigManager;
 use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::{Value, json};
 use sqlx::{AnyPool, Row};

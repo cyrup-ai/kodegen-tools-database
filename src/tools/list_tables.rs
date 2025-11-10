@@ -3,7 +3,7 @@
 use kodegen_mcp_tool::Tool;
 use kodegen_mcp_tool::error::McpError;
 use kodegen_mcp_schema::database::{ListTablesArgs, ListTablesPromptArgs};
-use kodegen_tools_config::ConfigManager;
+use kodegen_config_manager::ConfigManager;
 use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::{Value, json};
 use sqlx::{AnyPool, Row};

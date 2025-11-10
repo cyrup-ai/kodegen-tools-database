@@ -8,7 +8,7 @@ use crate::{
     ExposeSecret, SecretString,
 };
 use anyhow::{Result, Context};
-use kodegen_tools_config::ConfigManager;
+use kodegen_config_manager::ConfigManager;
 use sqlx::pool::PoolOptions;
 use sqlx::AnyPool;
 use std::sync::Arc;
@@ -117,7 +117,7 @@ pub async fn setup_database_pool(
     let min_connections = config_manager
         .get_value("db_min_connections")
         .and_then(|v| match v {
-            kodegen_tools_config::ConfigValue::Number(n) => Some(n as u32),
+            kodegen_config_manager::ConfigValue::Number(n) => Some(n as u32),
             _ => None,
         })
         .unwrap_or(2); // 2 connections default for responsiveness
@@ -133,7 +133,7 @@ pub async fn setup_database_pool(
         let acquire_timeout = config_manager
             .get_value("db_acquire_timeout_secs")
             .and_then(|v| match v {
-                kodegen_tools_config::ConfigValue::Number(n) => {
+                kodegen_config_manager::ConfigValue::Number(n) => {
                     Some(Duration::from_secs(n as u64))
                 }
                 _ => None,
@@ -143,7 +143,7 @@ pub async fn setup_database_pool(
         let idle_timeout = config_manager
             .get_value("db_idle_timeout_secs")
             .and_then(|v| match v {
-                kodegen_tools_config::ConfigValue::Number(n) => {
+                kodegen_config_manager::ConfigValue::Number(n) => {
                     Some(Duration::from_secs(n as u64))
                 }
                 _ => None,
@@ -153,7 +153,7 @@ pub async fn setup_database_pool(
         let max_lifetime = config_manager
             .get_value("db_max_lifetime_secs")
             .and_then(|v| match v {
-                kodegen_tools_config::ConfigValue::Number(n) => {
+                kodegen_config_manager::ConfigValue::Number(n) => {
                     Some(Duration::from_secs(n as u64))
                 }
                 _ => None,
@@ -163,7 +163,7 @@ pub async fn setup_database_pool(
         let max_connections = config_manager
             .get_value("db_max_connections")
             .and_then(|v| match v {
-                kodegen_tools_config::ConfigValue::Number(n) => Some(n as u32),
+                kodegen_config_manager::ConfigValue::Number(n) => Some(n as u32),
                 _ => None,
             })
             .unwrap_or(10); // 10 connections default
