@@ -43,10 +43,10 @@ pub use types::{
 };
 pub use validate::validate_sqlite_identifier;
 
-/// Start the HTTP server programmatically for embedded mode
+/// Start the HTTP server programmatically
 ///
-/// This is called by kodegend instead of spawning an external process.
-/// Blocks until the server shuts down.
+/// Returns a ServerHandle for graceful shutdown control.
+/// This function is non-blocking - the server runs in background tasks.
 ///
 /// # Arguments
 /// * `addr` - Socket address to bind to (e.g., "127.0.0.1:30446")
@@ -54,7 +54,7 @@ pub use validate::validate_sqlite_identifier;
 /// * `tls_key` - Optional path to TLS private key file
 ///
 /// # Returns
-/// Ok(()) on successful shutdown, Err on initialization failure or shutdown timeout
+/// ServerHandle for graceful shutdown, or error if startup fails
 ///
 /// # Environment Variables
 /// * `DATABASE_DSN` - Required database connection string
@@ -63,152 +63,112 @@ pub async fn start_server(
     addr: std::net::SocketAddr,
     tls_cert: Option<std::path::PathBuf>,
     tls_key: Option<std::path::PathBuf>,
-) -> anyhow::Result<()> {
-    use anyhow::Context;
-    use kodegen_server_http::{Managers, ShutdownHook, register_tool};
-    use kodegen_tools_config::ConfigManager;
+) -> anyhow::Result<kodegen_server_http::ServerHandle> {
+    use kodegen_server_http::{create_http_server, Managers, RouterSet, ShutdownHook, register_tool};
     use rmcp::handler::server::router::{prompt::PromptRouter, tool::ToolRouter};
     use std::sync::Arc;
+    use std::time::Duration;
     use tokio::sync::Mutex;
+    use anyhow::Context;
 
-    // Initialize logging (idempotent)
-    let _ = env_logger::try_init();
-
-    // Install rustls crypto provider (idempotent - safe to call multiple times)
-    let _ = rustls::crypto::ring::default_provider().install_default();
-
-    // Initialize config
-    let config = ConfigManager::new();
-    config.init().await?;
-
-    // Initialize tool history
-    let timestamp = chrono::Utc::now();
-    let pid = std::process::id();
-    let instance_id = format!("{}-{}", timestamp.format("%Y%m%d-%H%M%S-%9f"), pid);
-    kodegen_mcp_tool::tool_history::init_global_history(instance_id.clone()).await;
-
-    // Create routers
-    let mut tool_router = ToolRouter::new();
-    let mut prompt_router = PromptRouter::new();
-    let managers = Managers::new();
-
-    // Get DATABASE_DSN from environment (required)
-    let dsn = std::env::var("DATABASE_DSN")
-        .context("DATABASE_DSN environment variable is required for database server")?;
-
-    // Parse optional SSH tunnel configuration
-    let ssh_config = parse_ssh_config_from_env()?;
-
-    // Setup database connection pool (with optional SSH tunnel)
-    let db_connection = crate::setup_database_pool(&config, &dsn, ssh_config).await?;
-
-    // Register SSH tunnel for graceful shutdown if present
-    if db_connection.tunnel.is_some() {
-        let tunnel_guard = Arc::new(Mutex::new(db_connection.tunnel));
-        
-        // Implement shutdown hook
-        struct TunnelGuard(Arc<Mutex<Option<crate::SSHTunnel>>>);
-        impl ShutdownHook for TunnelGuard {
-            fn shutdown(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + '_>> {
-                let guard = self.0.clone();
-                Box::pin(async move {
-                    let mut tunnel_opt = guard.lock().await;
-                    if let Some(tunnel) = tunnel_opt.take() {
-                        log::info!("Closing SSH tunnel for database connection");
-                        tunnel.close().await;
-                    }
-                    Ok(())
-                })
-            }
-        }
-        
-        managers.register(TunnelGuard(tunnel_guard)).await;
-    }
-
-    // Register all 7 database tools
-    use crate::tools::*;
-
-    let pool = db_connection.pool;
-    let connection_url = &db_connection.connection_url;
-
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        ExecuteSQLTool::new(pool.clone(), config.clone(), connection_url)?,
-    );
-
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        ListSchemasTool::new(pool.clone(), connection_url, config.clone())?,
-    );
-
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        ListTablesTool::new(pool.clone(), connection_url, config.clone())?,
-    );
-
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        GetTableSchemaTool::new(pool.clone(), connection_url, Arc::new(config.clone()))?,
-    );
-
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        GetTableIndexesTool::new(pool.clone(), connection_url, Arc::new(config.clone()))?,
-    );
-
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        GetStoredProceduresTool::new(pool.clone(), connection_url, Arc::new(config.clone()))?,
-    );
-
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        GetPoolStatsTool::new(pool.clone(), connection_url)?,
-    );
-
-    // Create session manager
-    let session_config = rmcp::transport::streamable_http_server::session::local::SessionConfig {
-        channel_capacity: 16,
-        keep_alive: Some(std::time::Duration::from_secs(3600)),
+    let tls_config = match (tls_cert, tls_key) {
+        (Some(cert), Some(key)) => Some((cert, key)),
+        _ => None,
     };
-    let session_manager = Arc::new(
-        rmcp::transport::streamable_http_server::session::local::LocalSessionManager {
-            sessions: Default::default(),
-            session_config,
-        }
-    );
 
-    // Create usage tracker
-    let usage_tracker = kodegen_utils::usage_tracker::UsageTracker::new(
-        format!("database-{}", instance_id)
-    );
+    let shutdown_timeout = Duration::from_secs(30);
 
-    // Create HTTP server
-    let server = kodegen_server_http::HttpServer::new(
-        tool_router,
-        prompt_router,
-        usage_tracker,
-        config,
-        managers,
-        session_manager,
-    );
+    create_http_server("database", addr, tls_config, shutdown_timeout, |config, _tracker| {
+        let config = config.clone();
+        Box::pin(async move {
+            let mut tool_router = ToolRouter::new();
+            let mut prompt_router = PromptRouter::new();
+            let managers = Managers::new();
 
-    // Start server
-    let shutdown_timeout = std::time::Duration::from_secs(30);
-    let tls_config = tls_cert.zip(tls_key);
-    let handle = server.serve_with_tls(addr, tls_config, shutdown_timeout).await?;
+            // Get DATABASE_DSN from environment (required)
+            let dsn = std::env::var("DATABASE_DSN")
+                .context("DATABASE_DSN environment variable is required for database server")?;
 
-    handle.wait_for_completion(shutdown_timeout).await
-        .map_err(|e| anyhow::anyhow!("Server shutdown error: {}", e))?;
+            // Parse optional SSH tunnel configuration
+            let ssh_config = parse_ssh_config_from_env()?;
 
-    Ok(())
+            // Setup database connection pool (with optional SSH tunnel)
+            let db_connection = crate::setup_database_pool(&config, &dsn, ssh_config).await?;
+
+            // Register SSH tunnel for graceful shutdown if present
+            if db_connection.tunnel.is_some() {
+                let tunnel_guard = Arc::new(Mutex::new(db_connection.tunnel));
+
+                // Implement shutdown hook
+                struct TunnelGuard(Arc<Mutex<Option<crate::SSHTunnel>>>);
+                impl ShutdownHook for TunnelGuard {
+                    fn shutdown(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + '_>> {
+                        let guard = self.0.clone();
+                        Box::pin(async move {
+                            let mut tunnel_opt = guard.lock().await;
+                            if let Some(tunnel) = tunnel_opt.take() {
+                                log::info!("Closing SSH tunnel for database connection");
+                                tunnel.close().await;
+                            }
+                            Ok(())
+                        })
+                    }
+                }
+
+                managers.register(TunnelGuard(tunnel_guard)).await;
+            }
+
+            // Register all 7 database tools
+            use crate::tools::*;
+
+            let pool = db_connection.pool;
+            let connection_url = &db_connection.connection_url;
+
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                ExecuteSQLTool::new(pool.clone(), config.clone(), connection_url)?,
+            );
+
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                ListSchemasTool::new(pool.clone(), connection_url, config.clone())?,
+            );
+
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                ListTablesTool::new(pool.clone(), connection_url, config.clone())?,
+            );
+
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                GetTableSchemaTool::new(pool.clone(), connection_url, Arc::new(config.clone()))?,
+            );
+
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                GetTableIndexesTool::new(pool.clone(), connection_url, Arc::new(config.clone()))?,
+            );
+
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                GetStoredProceduresTool::new(pool.clone(), connection_url, Arc::new(config.clone()))?,
+            );
+
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                GetPoolStatsTool::new(pool.clone(), connection_url)?,
+            );
+
+            Ok(RouterSet::new(tool_router, prompt_router, managers))
+        })
+    }).await
 }
 
 /// Parse SSH configuration from environment variables
