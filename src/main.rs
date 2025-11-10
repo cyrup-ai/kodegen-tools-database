@@ -136,9 +136,12 @@ async fn main() -> Result<()> {
         let mut prompt_router = PromptRouter::new();
         let managers = Managers::new();
 
-        // Get DATABASE_DSN from environment (required)
+        // Get DATABASE_DSN from environment (defaults to in-memory SQLite)
         let dsn = std::env::var("DATABASE_DSN")
-            .context("DATABASE_DSN environment variable is required for database server")?;
+            .unwrap_or_else(|_| {
+                log::info!("DATABASE_DSN not set, defaulting to sqlite:///:memory:");
+                "sqlite:///:memory:".to_string()
+            });
 
         // Parse optional SSH tunnel configuration
         let ssh_config = parse_ssh_config_from_env()?;
