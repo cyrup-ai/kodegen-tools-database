@@ -103,7 +103,7 @@ impl DatabaseType {
             Ok(Self::MySQL)
         } else if url.starts_with("mariadb://") {
             Ok(Self::MariaDB)
-        } else if url.starts_with("sqlite://") || url.starts_with("file:") {
+        } else if url.starts_with("sqlite:") || url.starts_with("file:") {
             Ok(Self::SQLite)
         } else if url.starts_with("sqlserver://") || url.starts_with("mssql://") {
             Ok(Self::SqlServer)

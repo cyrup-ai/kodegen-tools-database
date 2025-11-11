@@ -1,5 +1,5 @@
 -- SQLite-specific schema (for reference, not used by Docker)
--- SQLite will use in-memory databases in examples: sqlite:///:memory:
+-- SQLite will use in-memory databases in examples: sqlite::memory:
 
 CREATE TABLE departments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

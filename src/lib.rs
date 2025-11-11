@@ -57,7 +57,7 @@ pub use validate::validate_sqlite_identifier;
 /// ServerHandle for graceful shutdown, or error if startup fails
 ///
 /// # Environment Variables
-/// * `DATABASE_DSN` - Database connection string (defaults to `sqlite:///:memory:` if not set)
+/// * `DATABASE_DSN` - Database connection string (defaults to `sqlite::memory:` if not set)
 /// * `SSH_HOST`, `SSH_PORT`, `SSH_USER`, `SSH_AUTH_TYPE` - Optional SSH tunnel config
 pub async fn start_server(
     addr: std::net::SocketAddr,
@@ -87,8 +87,8 @@ pub async fn start_server(
             // Get DATABASE_DSN from environment (defaults to in-memory SQLite)
             let dsn = std::env::var("DATABASE_DSN")
                 .unwrap_or_else(|_| {
-                    log::info!("DATABASE_DSN not set, defaulting to sqlite:///:memory:");
-                    "sqlite:///:memory:".to_string()
+                    log::info!("DATABASE_DSN not set, defaulting to sqlite::memory:");
+                    "sqlite::memory:".to_string()
                 });
 
             // Parse optional SSH tunnel configuration

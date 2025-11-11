@@ -288,13 +288,17 @@ pub fn parse_dsn(dsn: &str) -> Result<DSNInfo> {
 }
 
 fn parse_sqlite_dsn(dsn: &str) -> Result<DSNInfo> {
-    // SQLite format: sqlite:///path or sqlite:///:memory:
-    let path_part = dsn
-        .strip_prefix("sqlite://")
-        .context("Invalid SQLite DSN format")?;
+    // SQLite format: sqlite::memory: or sqlite:///path or sqlite://:memory:
+    let path_part = if let Some(stripped) = dsn.strip_prefix("sqlite://") {
+        stripped
+    } else if let Some(stripped) = dsn.strip_prefix("sqlite:") {
+        stripped
+    } else {
+        return Err(anyhow::anyhow!("Invalid SQLite DSN format"));
+    };
 
-    // Handle in-memory database
-    if path_part == "/:memory:" {
+    // Handle in-memory database (both :memory: and /:memory: for compatibility)
+    if path_part == ":memory:" || path_part == "/:memory:" {
         return Ok(DSNInfo {
             protocol: "sqlite".to_string(),
             username: None,

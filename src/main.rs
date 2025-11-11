@@ -139,8 +139,8 @@ async fn main() -> Result<()> {
         // Get DATABASE_DSN from environment (defaults to in-memory SQLite)
         let dsn = std::env::var("DATABASE_DSN")
             .unwrap_or_else(|_| {
-                log::info!("DATABASE_DSN not set, defaulting to sqlite:///:memory:");
-                "sqlite:///:memory:".to_string()
+                log::info!("DATABASE_DSN not set, defaulting to sqlite::memory:");
+                "sqlite::memory:".to_string()
             });
 
         // Parse optional SSH tunnel configuration
