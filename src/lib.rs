@@ -78,7 +78,7 @@ pub async fn start_server(
     };
 
     let shutdown_timeout = Duration::from_secs(30);
-    let session_keep_alive = Duration::from_secs(300); // 5 minutes
+    let session_keep_alive = Duration::ZERO;
 
     create_http_server("database", addr, tls_config, shutdown_timeout, session_keep_alive, |config: &ConfigManager, _tracker: &UsageTracker| {
         let config = config.clone();
