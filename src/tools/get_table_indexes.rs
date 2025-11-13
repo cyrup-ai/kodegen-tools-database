@@ -7,8 +7,8 @@ use crate::types::{DatabaseType, TableIndex};
 use kodegen_mcp_tool::{Tool, error::McpError};
 use kodegen_mcp_schema::database::{GetTableIndexesArgs, GetTableIndexesPromptArgs};
 use kodegen_config_manager::ConfigManager;
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::json;
 use sqlx::{AnyPool, Row};
 use std::sync::Arc;
 use std::time::Duration;
@@ -43,7 +43,7 @@ impl Tool for GetTableIndexesTool {
     type PromptArgs = GetTableIndexesPromptArgs;
 
     fn name() -> &'static str {
-        "get_table_indexes"
+        "db_table_indexes"
     }
 
     fn description() -> &'static str {
@@ -60,7 +60,7 @@ impl Tool for GetTableIndexesTool {
         true // Queries external database
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Use stored database type
         let db_type = self.db_type;
 
@@ -153,12 +153,48 @@ impl Tool for GetTableIndexesTool {
             }
         }
 
-        Ok(json!({
+        let mut contents = Vec::new();
+        
+        // Human-readable summary
+        let summary = format!(
+            "🔍 Indexes on {}.{}\n\n\
+             Found {} indexes:\n\
+             {}",
+            schema,
+            args.table,
+            indexes.len(),
+            indexes.iter()
+                .map(|idx| {
+                    let type_str = if idx.is_primary {
+                        "PRIMARY KEY"
+                    } else if idx.is_unique {
+                        "UNIQUE"
+                    } else {
+                        "INDEX"
+                    };
+                    format!("  • {} ({}): {}", 
+                        idx.index_name, 
+                        type_str,
+                        idx.column_names.join(", ")
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        contents.push(Content::text(summary));
+        
+        // JSON metadata
+        let metadata = json!({
             "table": args.table,
             "schema": schema,
             "indexes": indexes,
             "index_count": indexes.len()
-        }))
+        });
+        let json_str = serde_json::to_string_pretty(&metadata)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+        
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

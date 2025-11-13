@@ -65,6 +65,8 @@ pub async fn start_server(
     tls_key: Option<std::path::PathBuf>,
 ) -> anyhow::Result<kodegen_server_http::ServerHandle> {
     use kodegen_server_http::{create_http_server, Managers, RouterSet, ShutdownHook, register_tool};
+    use kodegen_config_manager::ConfigManager;
+    use kodegen_utils::usage_tracker::UsageTracker;
     use rmcp::handler::server::router::{prompt::PromptRouter, tool::ToolRouter};
     use std::sync::Arc;
     use std::time::Duration;
@@ -76,8 +78,9 @@ pub async fn start_server(
     };
 
     let shutdown_timeout = Duration::from_secs(30);
+    let session_keep_alive = Duration::from_secs(300); // 5 minutes
 
-    create_http_server("database", addr, tls_config, shutdown_timeout, |config, _tracker| {
+    create_http_server("database", addr, tls_config, shutdown_timeout, session_keep_alive, |config: &ConfigManager, _tracker: &UsageTracker| {
         let config = config.clone();
         Box::pin(async move {
             let mut tool_router = ToolRouter::new();

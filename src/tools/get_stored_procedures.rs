@@ -8,8 +8,8 @@ use crate::types::{DatabaseType, StoredProcedure};
 use kodegen_mcp_tool::{Tool, error::McpError};
 use kodegen_mcp_schema::database::{GetStoredProceduresArgs, GetStoredProceduresPromptArgs};
 use kodegen_config_manager::ConfigManager;
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::json;
 use sqlx::{AnyPool, Row};
 use std::sync::Arc;
 use std::time::Duration;
@@ -44,7 +44,7 @@ impl Tool for GetStoredProceduresTool {
     type PromptArgs = GetStoredProceduresPromptArgs;
 
     fn name() -> &'static str {
-        "get_stored_procedures"
+        "db_stored_procedures"
     }
 
     fn description() -> &'static str {
@@ -61,7 +61,7 @@ impl Tool for GetStoredProceduresTool {
         true // Queries external database
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Use stored database type
         let db_type = self.db_type;
 
@@ -131,11 +131,37 @@ impl Tool for GetStoredProceduresTool {
             })
             .collect::<Result<Vec<_>, DatabaseError>>()?;
 
-        Ok(json!({
+        let mut contents = Vec::new();
+        
+        // Human-readable summary
+        let mut summary = format!(
+            "⚙️  Stored Procedures in '{}'\n\n\
+             Found {} procedures:\n\
+             {}",
+            schema,
+            procedures.len(),
+            procedures.iter()
+                .take(10)
+                .map(|p| format!("  • {} ({})", p.procedure_name, p.procedure_type))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        if procedures.len() > 10 {
+            summary.push_str(&format!("\n  ... and {} more", procedures.len() - 10));
+        }
+        contents.push(Content::text(summary));
+        
+        // JSON metadata
+        let metadata = json!({
             "schema": schema,
             "procedures": procedures,
             "count": procedures.len()
-        }))
+        });
+        let json_str = serde_json::to_string_pretty(&metadata)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+        
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

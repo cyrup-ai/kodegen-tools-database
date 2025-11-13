@@ -3,8 +3,8 @@
 use crate::DatabaseType;
 use kodegen_mcp_tool::{Tool, error::McpError};
 use kodegen_mcp_schema::database::{GetPoolStatsArgs, GetPoolStatsPromptArgs};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::json;
 use sqlx::AnyPool;
 use std::sync::Arc;
 
@@ -27,7 +27,7 @@ impl Tool for GetPoolStatsTool {
     type PromptArgs = GetPoolStatsPromptArgs;
 
     fn name() -> &'static str {
-        "get_pool_stats"
+        "db_pool_stats"
     }
 
     fn description() -> &'static str {
@@ -40,7 +40,7 @@ impl Tool for GetPoolStatsTool {
         true // Read-only operation
     }
 
-    async fn execute(&self, _args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, _args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Get pool metrics
         let size = self.pool.size();
         let num_idle = self.pool.num_idle();
@@ -48,8 +48,37 @@ impl Tool for GetPoolStatsTool {
 
         // Get pool options
         let options = self.pool.options();
+        
+        // Calculate health metrics
+        let max_connections = options.get_max_connections();
+        let health_status = if num_active == max_connections {
+            "EXHAUSTED"
+        } else if num_idle == 0 {
+            "BUSY"
+        } else {
+            "HEALTHY"
+        };
+        let utilization_pct = (num_active as f64 / max_connections as f64 * 100.0).round() as u32;
 
-        Ok(json!({
+        let mut contents = Vec::new();
+        
+        // Human-readable summary
+        let summary = format!(
+            "🔌 Connection Pool Health\n\n\
+             Status: {}\n\
+             Utilization: {}%\n\
+             Active: {}/{}\n\
+             Idle: {}",
+            health_status,
+            utilization_pct,
+            num_active,
+            max_connections,
+            num_idle
+        );
+        contents.push(Content::text(summary));
+        
+        // JSON metadata
+        let metadata = json!({
             "database_type": format!("{:?}", self.db_type),
             "connections": {
                 "total": size,
@@ -57,7 +86,7 @@ impl Tool for GetPoolStatsTool {
                 "idle": num_idle,
             },
             "configuration": {
-                "max_connections": options.get_max_connections(),
+                "max_connections": max_connections,
                 "min_connections": options.get_min_connections(),
                 "acquire_timeout_secs": options.get_acquire_timeout().as_secs(),
                 "idle_timeout_secs": options.get_idle_timeout().map(|d| d.as_secs()),
@@ -65,16 +94,15 @@ impl Tool for GetPoolStatsTool {
                 "test_before_acquire": options.get_test_before_acquire(),
             },
             "health": {
-                "status": if num_active == options.get_max_connections() {
-                    "EXHAUSTED"
-                } else if num_idle == 0 {
-                    "BUSY"
-                } else {
-                    "HEALTHY"
-                },
-                "utilization_pct": (num_active as f64 / options.get_max_connections() as f64 * 100.0).round() as u32,
+                "status": health_status,
+                "utilization_pct": utilization_pct,
             }
-        }))
+        });
+        let json_str = serde_json::to_string_pretty(&metadata)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+        
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

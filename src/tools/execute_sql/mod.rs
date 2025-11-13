@@ -15,15 +15,15 @@ use crate::{
 };
 use kodegen_mcp_tool::{Tool, error::McpError};
 use kodegen_mcp_schema::database::{ExecuteSQLArgs, ExecuteSQLPromptArgs};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::Value;
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+
 
 impl Tool for ExecuteSQLTool {
     type Args = ExecuteSQLArgs;
     type PromptArgs = ExecuteSQLPromptArgs;
 
     fn name() -> &'static str {
-        "execute_sql"
+        "db_execute_sql"
     }
 
     fn description() -> &'static str {
@@ -59,7 +59,7 @@ impl Tool for ExecuteSQLTool {
         true // Network database connection
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
         // 1. Get configuration
         let readonly = self
             .config
@@ -96,17 +96,41 @@ impl Tool for ExecuteSQLTool {
         let statements = split_sql_statements(&sql, db_type)
             .map_err(|e| anyhow::anyhow!("SQL parse error: {}", e))?;
 
-        // 6. Execute single or multi-statement
-        if statements.len() == 1 {
-            self.execute_single(&statements[0]).await
+        // 6. Execute single or multi-statement (get Value from internal methods)
+        let result_value = if statements.len() == 1 {
+            self.execute_single(&statements[0]).await?
         } else {
             // Route based on statement types
             if should_use_transaction(&statements, db_type) {
-                self.execute_multi_transactional(&statements).await
+                self.execute_multi_transactional(&statements).await?
             } else {
-                self.execute_multi_non_transactional(&statements).await
+                self.execute_multi_non_transactional(&statements).await?
             }
-        }
+        };
+        
+        // 7. Convert Value to Vec<Content>
+        let mut contents = Vec::new();
+        
+        // Extract values from result_value
+        let row_count = result_value["row_count"].as_u64().unwrap_or(0);
+        let has_errors = result_value.get("errors").is_some();
+        
+        // Human-readable summary
+        let summary = format!(
+            "📊 SQL Query Executed\n\n\
+             Rows returned: {}\n\
+             Status: {}",
+            row_count,
+            if has_errors { "⚠️  Completed with errors" } else { "✅ Success" }
+        );
+        contents.push(Content::text(summary));
+        
+        // JSON metadata
+        let json_str = serde_json::to_string_pretty(&result_value)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+        
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

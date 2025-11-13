@@ -63,7 +63,7 @@ kodegen-database
 
 ## The 7 Database Tools
 
-### 1. execute_sql
+### 1. db_execute_sql
 
 Execute SQL queries with transaction support, retry logic, and automatic row limiting.
 
@@ -76,7 +76,7 @@ Execute SQL queries with transaction support, retry logic, and automatic row lim
 
 **Example:**
 ```javascript
-execute_sql({
+db_execute_sql({
   "sql": "SELECT * FROM employees WHERE department_id = 1",
   "readonly": true,
   "max_rows": 100
@@ -94,13 +94,13 @@ execute_sql({
 }
 ```
 
-### 2. list_schemas
+### 2. db_list_schemas
 
 List all databases or schemas available on the server.
 
 **Example:**
 ```javascript
-list_schemas({})
+db_list_schemas({})
 ```
 
 **Response:**
@@ -113,13 +113,13 @@ list_schemas({})
 }
 ```
 
-### 3. list_tables
+### 3. db_list_tables
 
 List all tables within a specific schema/database.
 
 **Example:**
 ```javascript
-list_tables({
+db_list_tables({
   "schema": "public"
 })
 ```
@@ -134,13 +134,13 @@ list_tables({
 }
 ```
 
-### 4. get_table_schema
+### 4. db_table_schema
 
 Get detailed column information for a table.
 
 **Example:**
 ```javascript
-get_table_schema({
+db_table_schema({
   "schema": "public",
   "table": "employees"
 })
@@ -166,13 +166,13 @@ get_table_schema({
 }
 ```
 
-### 5. get_table_indexes
+### 5. db_table_indexes
 
 Get index information for a table.
 
 **Example:**
 ```javascript
-get_table_indexes({
+db_table_indexes({
   "schema": "public",
   "table": "employees"
 })
@@ -198,13 +198,13 @@ get_table_indexes({
 }
 ```
 
-### 6. get_stored_procedures
+### 6. db_stored_procedures
 
 List stored procedures (PostgreSQL and MySQL only).
 
 **Example:**
 ```javascript
-get_stored_procedures({
+db_stored_procedures({
   "schema": "public"
 })
 ```
@@ -223,13 +223,13 @@ get_stored_procedures({
 }
 ```
 
-### 7. get_pool_stats
+### 7. db_pool_stats
 
 Monitor connection pool health and performance.
 
 **Example:**
 ```javascript
-get_pool_stats({})
+db_pool_stats({})
 ```
 
 **Response:**
@@ -463,23 +463,23 @@ All tools follow a consistent pattern:
 
 ```javascript
 // 1. List all schemas
-list_schemas({})
+db_list_schemas({})
 
 // 2. List tables in a schema
-list_tables({"schema": "public"})
+db_list_tables({"schema": "public"})
 
 // 3. Get table structure
-get_table_schema({"schema": "public", "table": "employees"})
+db_table_schema({"schema": "public", "table": "employees"})
 
 // 4. Get indexes
-get_table_indexes({"schema": "public", "table": "employees"})
+db_table_indexes({"schema": "public", "table": "employees"})
 ```
 
 ### Data Analysis
 
 ```javascript
 // Execute analytical query
-execute_sql({
+db_execute_sql({
   "sql": `
     SELECT 
       d.name as department,
@@ -499,7 +499,7 @@ execute_sql({
 ### Multi-Statement Transaction
 
 ```javascript
-execute_sql({
+db_execute_sql({
   "sql": `
     INSERT INTO departments (name, budget) VALUES ('Engineering', 500000);
     INSERT INTO employees (name, email, department_id, salary, hire_date, active)

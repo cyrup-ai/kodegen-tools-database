@@ -4,8 +4,8 @@ use kodegen_mcp_tool::Tool;
 use kodegen_mcp_tool::error::McpError;
 use kodegen_mcp_schema::database::{ListTablesArgs, ListTablesPromptArgs};
 use kodegen_config_manager::ConfigManager;
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::json;
 use sqlx::{AnyPool, Row};
 use std::sync::Arc;
 use std::time::Duration;
@@ -53,7 +53,7 @@ impl Tool for ListTablesTool {
     type PromptArgs = ListTablesPromptArgs;
 
     fn name() -> &'static str {
-        "list_tables"
+        "db_list_tables"
     }
 
     fn description() -> &'static str {
@@ -70,7 +70,7 @@ impl Tool for ListTablesTool {
         false
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Use stored database type
         let db_type = self.db_type;
 
@@ -115,11 +115,37 @@ impl Tool for ListTablesTool {
             .filter_map(|row| row.try_get("table_name").ok())
             .collect();
 
-        Ok(json!({
+        let mut contents = Vec::new();
+        
+        // Human-readable summary
+        let mut summary = format!(
+            "📁 Tables in schema '{}'\n\n\
+             Found {} tables:\n\
+             {}",
+            resolved_schema,
+            tables.len(),
+            tables.iter()
+                .take(10)
+                .map(|t| format!("  • {}", t))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        if tables.len() > 10 {
+            summary.push_str(&format!("\n  ... and {} more", tables.len() - 10));
+        }
+        contents.push(Content::text(summary));
+        
+        // JSON metadata
+        let metadata = json!({
             "tables": tables,
             "schema": resolved_schema,
             "count": tables.len()
-        }))
+        });
+        let json_str = serde_json::to_string_pretty(&metadata)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+        
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {
