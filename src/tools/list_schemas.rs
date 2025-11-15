@@ -53,7 +53,7 @@ impl Tool for ListSchemasTool {
     type PromptArgs = ListSchemasPromptArgs;
 
     fn name() -> &'static str {
-        "db_list_schemas"
+        kodegen_mcp_schema::database::DB_LIST_SCHEMAS
     }
 
     fn description() -> &'static str {

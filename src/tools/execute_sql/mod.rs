@@ -23,7 +23,7 @@ impl Tool for ExecuteSQLTool {
     type PromptArgs = ExecuteSQLPromptArgs;
 
     fn name() -> &'static str {
-        "db_execute_sql"
+        kodegen_mcp_schema::database::DB_EXECUTE_SQL
     }
 
     fn description() -> &'static str {

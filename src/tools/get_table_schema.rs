@@ -44,7 +44,7 @@ impl Tool for GetTableSchemaTool {
     type PromptArgs = GetTableSchemaPromptArgs;
 
     fn name() -> &'static str {
-        "db_table_schema"
+        kodegen_mcp_schema::database::DB_TABLE_SCHEMA
     }
 
     fn description() -> &'static str {

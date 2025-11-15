@@ -37,7 +37,7 @@
 mod common;
 
 use anyhow::{Context, Result};
-use kodegen_mcp_client::tools;
+use kodegen_mcp_schema::database::*;
 use serde_json::json;
 use std::time::Duration;
 use tokio::process::Command;
@@ -156,7 +156,7 @@ async fn test_database_tools(client: &common::LoggingClient) -> Result<()> {
     // Tool 1: LIST_SCHEMAS
     info!("\n[1/8] Testing list_schemas...");
     client
-        .call_tool(tools::LIST_SCHEMAS, json!({}))
+        .call_tool(DB_LIST_SCHEMAS, json!({}))
         .await
         .context("list_schemas failed")?;
     info!("✅ list_schemas completed");
@@ -164,7 +164,7 @@ async fn test_database_tools(client: &common::LoggingClient) -> Result<()> {
     // Tool 2: LIST_TABLES
     info!("\n[2/8] Testing list_tables...");
     client
-        .call_tool(tools::LIST_TABLES, json!({}))
+        .call_tool(DB_LIST_TABLES, json!({}))
         .await
         .context("list_tables failed")?;
     info!("✅ list_tables completed");
@@ -172,7 +172,7 @@ async fn test_database_tools(client: &common::LoggingClient) -> Result<()> {
     // Tool 3: GET_TABLE_SCHEMA
     info!("\n[3/8] Testing get_table_schema on 'employees' table...");
     client
-        .call_tool(tools::GET_TABLE_SCHEMA, json!({ "table": "employees" }))
+        .call_tool(DB_GET_TABLE_SCHEMA, json!({ "table": "employees" }))
         .await
         .context("get_table_schema failed")?;
     info!("✅ get_table_schema completed");
@@ -180,7 +180,7 @@ async fn test_database_tools(client: &common::LoggingClient) -> Result<()> {
     // Tool 4: GET_TABLE_INDEXES
     info!("\n[4/8] Testing get_table_indexes on 'employees' table...");
     client
-        .call_tool(tools::GET_TABLE_INDEXES, json!({ "table": "employees" }))
+        .call_tool(DB_GET_TABLE_INDEXES, json!({ "table": "employees" }))
         .await
         .context("get_table_indexes failed")?;
     info!("✅ get_table_indexes completed");
@@ -188,8 +188,8 @@ async fn test_database_tools(client: &common::LoggingClient) -> Result<()> {
     // Tool 5: EXECUTE_SQL (SELECT)
     info!("\n[5/8] Testing execute_sql with SELECT...");
     client.call_tool(
-        tools::EXECUTE_SQL,
-        json!({ 
+        DB_EXECUTE_SQL,
+        json!({
             "sql": "SELECT id, name, CAST(budget AS TEXT) as budget, CAST(created_at AS TEXT) as created_at FROM departments LIMIT 3"
         })
     )
@@ -200,8 +200,8 @@ async fn test_database_tools(client: &common::LoggingClient) -> Result<()> {
     // Tool 6: EXECUTE_SQL (JOIN)
     info!("\n[6/8] Testing execute_sql with JOIN...");
     client.call_tool(
-        tools::EXECUTE_SQL,
-        json!({ 
+        DB_EXECUTE_SQL,
+        json!({
             "sql": "SELECT e.name, e.email, d.name as department, CAST(e.hire_date AS TEXT) as hire_date \
                     FROM employees e \
                     JOIN departments d ON e.department_id = d.id \
@@ -215,7 +215,7 @@ async fn test_database_tools(client: &common::LoggingClient) -> Result<()> {
     // Tool 7: GET_POOL_STATS
     info!("\n[7/8] Testing get_pool_stats...");
     client
-        .call_tool(tools::GET_POOL_STATS, json!({}))
+        .call_tool(DB_GET_POOL_STATS, json!({}))
         .await
         .context("get_pool_stats failed")?;
     info!("✅ get_pool_stats completed");
@@ -223,7 +223,7 @@ async fn test_database_tools(client: &common::LoggingClient) -> Result<()> {
     // Tool 8: GET_STORED_PROCEDURES
     info!("\n[8/8] Testing get_stored_procedures...");
     client
-        .call_tool(tools::GET_STORED_PROCEDURES, json!({}))
+        .call_tool(DB_GET_STORED_PROCEDURES, json!({}))
         .await
         .context("get_stored_procedures failed")?;
     info!("✅ get_stored_procedures completed");

@@ -27,7 +27,7 @@ impl Tool for GetPoolStatsTool {
     type PromptArgs = GetPoolStatsPromptArgs;
 
     fn name() -> &'static str {
-        "db_pool_stats"
+        kodegen_mcp_schema::database::DB_POOL_STATS
     }
 
     fn description() -> &'static str {

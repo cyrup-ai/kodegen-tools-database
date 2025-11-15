@@ -44,7 +44,7 @@ impl Tool for GetStoredProceduresTool {
     type PromptArgs = GetStoredProceduresPromptArgs;
 
     fn name() -> &'static str {
-        "db_stored_procedures"
+        kodegen_mcp_schema::database::DB_STORED_PROCEDURES
     }
 
     fn description() -> &'static str {

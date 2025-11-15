@@ -1,6 +1,6 @@
 [package]
 name = "kodegen_tools_database"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 description = "KODEGEN.ᴀɪ: Memory-efficient, Blazing-Fast, MCP tools for code generation agents."
 authors = ["KODEGEN.ᴀɪ"]
@@ -55,7 +55,7 @@ serde_json = "1"
 schemars = "1"
 
 # MCP SDK - for rmcp types
-rmcp = { version = "0.8", features = ["server"]}
+rmcp = { version = "0.8", features = ["server"] }
 
 # Logging
 log = "0.4"
@@ -79,7 +79,7 @@ chrono = "0.4"
 
 
 [dev-dependencies]
-kodegen_mcp_client = { version = "0.2"  }
+kodegen_mcp_client = { version = "0.2" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 chrono = { version = "0.4", features = ["serde"] }

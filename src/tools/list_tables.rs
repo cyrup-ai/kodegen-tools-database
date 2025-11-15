@@ -53,7 +53,7 @@ impl Tool for ListTablesTool {
     type PromptArgs = ListTablesPromptArgs;
 
     fn name() -> &'static str {
-        "db_list_tables"
+        kodegen_mcp_schema::database::DB_LIST_TABLES
     }
 
     fn description() -> &'static str {

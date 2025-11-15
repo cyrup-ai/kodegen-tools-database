@@ -43,7 +43,7 @@ impl Tool for GetTableIndexesTool {
     type PromptArgs = GetTableIndexesPromptArgs;
 
     fn name() -> &'static str {
-        "db_table_indexes"
+        kodegen_mcp_schema::database::DB_TABLE_INDEXES
     }
 
     fn description() -> &'static str {
