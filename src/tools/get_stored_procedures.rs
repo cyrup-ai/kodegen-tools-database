@@ -132,23 +132,14 @@ impl Tool for GetStoredProceduresTool {
             .collect::<Result<Vec<_>, DatabaseError>>()?;
 
         let mut contents = Vec::new();
-        
-        // Human-readable summary
-        let mut summary = format!(
-            "⚙️  Stored Procedures in '{}'\n\n\
-             Found {} procedures:\n\
-             {}",
+
+        // Human-readable summary with ANSI color codes and Nerd Font icons
+        let summary = format!(
+            "\x1b[36m󰞔 Stored Procedures: {}\x1b[0m\n ℹ Total: {} · Schema: {}",
             schema,
             procedures.len(),
-            procedures.iter()
-                .take(10)
-                .map(|p| format!("  • {} ({})", p.procedure_name, p.procedure_type))
-                .collect::<Vec<_>>()
-                .join("\n")
+            schema
         );
-        if procedures.len() > 10 {
-            summary.push_str(&format!("\n  ... and {} more", procedures.len() - 10));
-        }
         contents.push(Content::text(summary));
         
         // JSON metadata
