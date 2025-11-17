@@ -116,23 +116,14 @@ impl Tool for ListTablesTool {
             .collect();
 
         let mut contents = Vec::new();
-        
+
         // Human-readable summary
-        let mut summary = format!(
-            "📁 Tables in schema '{}'\n\n\
-             Found {} tables:\n\
-             {}",
+        let summary = format!(
+            "\x1b[36m󰓅 Tables: {}\x1b[0m\n 󰈙 Total: {} · Schema: {}",
             resolved_schema,
             tables.len(),
-            tables.iter()
-                .take(10)
-                .map(|t| format!("  • {}", t))
-                .collect::<Vec<_>>()
-                .join("\n")
+            resolved_schema
         );
-        if tables.len() > 10 {
-            summary.push_str(&format!("\n  ... and {} more", tables.len() - 10));
-        }
         contents.push(Content::text(summary));
         
         // JSON metadata

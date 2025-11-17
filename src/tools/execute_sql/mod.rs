@@ -60,6 +60,8 @@ impl Tool for ExecuteSQLTool {
     }
 
     async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
+        let start_time = std::time::Instant::now();
+
         // 1. Get configuration
         let readonly = self
             .config
@@ -113,15 +115,16 @@ impl Tool for ExecuteSQLTool {
         
         // Extract values from result_value
         let row_count = result_value["row_count"].as_u64().unwrap_or(0);
-        let has_errors = result_value.get("errors").is_some();
-        
-        // Human-readable summary
+
+        // Calculate execution time
+        let elapsed_ms = start_time.elapsed().as_millis();
+
+        // Human-readable summary with ANSI colors and Nerd Font icons
         let summary = format!(
-            "📊 SQL Query Executed\n\n\
-             Rows returned: {}\n\
-             Status: {}",
+            "\x1b[36m SQL Executed\x1b[0m\n\
+             Rows: {} · Time: {}ms",
             row_count,
-            if has_errors { "⚠️  Completed with errors" } else { "✅ Success" }
+            elapsed_ms
         );
         contents.push(Content::text(summary));
         
