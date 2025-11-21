@@ -4,7 +4,7 @@ use crate::schema_queries::get_indexes_query;
 use crate::tools::helpers::resolve_schema_default;
 use crate::tools::timeout::execute_with_timeout;
 use crate::types::{DatabaseType, TableIndex};
-use kodegen_mcp_tool::{Tool, error::McpError};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
 use kodegen_mcp_schema::database::{GetTableIndexesArgs, GetTableIndexesPromptArgs};
 use kodegen_config_manager::ConfigManager;
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
@@ -60,7 +60,7 @@ impl Tool for GetTableIndexesTool {
         true // Queries external database
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
         // Use stored database type
         let db_type = self.db_type;
 

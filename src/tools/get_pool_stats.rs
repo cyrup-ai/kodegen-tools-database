@@ -1,7 +1,7 @@
 //! GetPoolStats tool - Exposes connection pool health metrics
 
 use crate::DatabaseType;
-use kodegen_mcp_tool::{Tool, error::McpError};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
 use kodegen_mcp_schema::database::{GetPoolStatsArgs, GetPoolStatsPromptArgs};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
@@ -40,7 +40,7 @@ impl Tool for GetPoolStatsTool {
         true // Read-only operation
     }
 
-    async fn execute(&self, _args: Self::Args) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, _args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
         // Get pool metrics
         let size = self.pool.size();
         let num_idle = self.pool.num_idle();

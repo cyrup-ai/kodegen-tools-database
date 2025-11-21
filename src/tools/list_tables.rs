@@ -1,7 +1,6 @@
 //! ListTables tool for database table exploration
 
-use kodegen_mcp_tool::Tool;
-use kodegen_mcp_tool::error::McpError;
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
 use kodegen_mcp_schema::database::{ListTablesArgs, ListTablesPromptArgs};
 use kodegen_config_manager::ConfigManager;
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
@@ -70,7 +69,7 @@ impl Tool for ListTablesTool {
         false
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
         // Use stored database type
         let db_type = self.db_type;
 

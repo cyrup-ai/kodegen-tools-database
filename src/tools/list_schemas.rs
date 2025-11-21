@@ -1,7 +1,6 @@
 //! ListSchemas tool for database schema exploration
 
-use kodegen_mcp_tool::Tool;
-use kodegen_mcp_tool::error::McpError;
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
 use kodegen_mcp_schema::database::{ListSchemasArgs, ListSchemasPromptArgs};
 use kodegen_config_manager::ConfigManager;
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
@@ -72,7 +71,7 @@ impl Tool for ListSchemasTool {
         false
     }
 
-    async fn execute(&self, _args: Self::Args) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, _args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
         // Use stored database type
         let db_type = self.db_type;
 

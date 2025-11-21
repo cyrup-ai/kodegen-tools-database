@@ -13,7 +13,7 @@ use helpers::should_use_transaction;
 use crate::{
     apply_row_limit, split_sql_statements, validate_readonly_sql,
 };
-use kodegen_mcp_tool::{Tool, error::McpError};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
 use kodegen_mcp_schema::database::{ExecuteSQLArgs, ExecuteSQLPromptArgs};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 
@@ -59,7 +59,7 @@ impl Tool for ExecuteSQLTool {
         true // Network database connection
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
         let start_time = std::time::Instant::now();
 
         // 1. Get configuration
