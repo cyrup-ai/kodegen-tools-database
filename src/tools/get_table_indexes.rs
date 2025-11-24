@@ -198,7 +198,18 @@ impl Tool for GetTableIndexesTool {
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {
-        vec![]
+        vec![
+            PromptArgument {
+                name: "focus_area".to_string(),
+                title: None,
+                description: Some(
+                    "Optional focus area for examples: 'query_optimization', 'constraint_discovery', or 'schema_analysis'. \
+                     Tailor the teaching examples to specific use cases."
+                        .to_string(),
+                ),
+                required: Some(false),
+            },
+        ]
     }
 
     async fn prompt(&self, _args: Self::PromptArgs) -> Result<Vec<PromptMessage>, McpError> {

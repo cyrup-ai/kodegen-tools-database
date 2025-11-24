@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="assets/img/banner.png" alt="Kodegen AI Banner" width="100%" />
+</div>
+
 # KODEGEN Database Tools
 
 **Blazing-Fast MCP Database Tools for AI Agents**

@@ -156,7 +156,24 @@ impl Tool for GetStoredProceduresTool {
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {
-        vec![]
+        vec![
+            PromptArgument {
+                name: "database_type".to_string(),
+                title: None,
+                description: Some(
+                    "Database type to focus on (postgres, mysql, sqlserver)".to_string(),
+                ),
+                required: Some(false),
+            },
+            PromptArgument {
+                name: "detail_level".to_string(),
+                title: None,
+                description: Some(
+                    "Detail level for examples (basic or advanced)".to_string(),
+                ),
+                required: Some(false),
+            },
+        ]
     }
 
     async fn prompt(&self, _args: Self::PromptArgs) -> Result<Vec<PromptMessage>, McpError> {
@@ -164,23 +181,46 @@ impl Tool for GetStoredProceduresTool {
             PromptMessage {
                 role: PromptMessageRole::User,
                 content: PromptMessageContent::Text {
-                    text: "When should I use get_stored_procedures?".to_string(),
+                    text: "How do I use get_stored_procedures to discover and inspect database procedures?".to_string(),
                 },
             },
             PromptMessage {
                 role: PromptMessageRole::Assistant,
                 content: PromptMessageContent::Text {
-                    text: "Use get_stored_procedures to discover available procedures and functions.\n\n\
-                           Supported databases: PostgreSQL, MySQL/MariaDB, SQL Server\n\
-                           NOT supported: SQLite (returns error)\n\n\
-                           Set include_details=true to see:\n\
-                           - Parameter lists\n\
-                           - Return types (for functions)\n\
-                           - Full definitions\n\n\
-                           Set include_details=false for just procedure names (faster, less data).\n\n\
-                           Example:\n\
-                           get_stored_procedures(schema='public', include_details=false)\n\
-                           -> Returns list of procedure names and types"
+                    text: "The get_stored_procedures tool lists stored procedures and functions in a database schema.\n\n\
+                           SUPPORTED DATABASES:\n\
+                           • PostgreSQL: Full support for functions and procedures\n\
+                           • MySQL/MariaDB: Full support for procedures and functions\n\
+                           • SQL Server: Full support for stored procedures\n\
+                           • SQLite: NOT supported (returns error)\n\n\
+                           BASIC USAGE:\n\
+                           1. List procedure names only (fast):\n   \
+                              get_stored_procedures({\"schema\": \"public\", \"include_details\": false})\n\
+                           2. Include full details (slower, more data):\n   \
+                              get_stored_procedures({\"schema\": \"public\", \"include_details\": true})\n\n\
+                           PARAMETERS:\n\
+                           • schema: Schema name (optional, uses database default if omitted)\n\
+                           • include_details: Boolean flag\n\
+                             - true: Returns parameter lists, return types, and full definitions\n\
+                             - false: Returns only procedure/function names and types (recommended for large schemas)\n\n\
+                           RETURN FORMAT:\n\
+                           JSON object containing:\n{\n  \"schema\": \"public\",\n  \"procedures\": [\n    {\n      \"procedure_name\": \"calculate_total\",\n      \"procedure_type\": \"FUNCTION\",\n      \"language\": \"plpgsql\",\n      \"parameter_list\": \"amount numeric\",\n      \"return_type\": \"numeric\",\n      \"definition\": \"...\"\n    }\n  ],\n  \"count\": 42\n}\n\
+                           WORKFLOW INTEGRATION:\n\
+                           1. list_schemas() -> discover available schemas\n\
+                           2. list_tables(schema='public') -> find tables\n\
+                           3. get_stored_procedures(schema='public') -> find related procedures\n\
+                           4. get_table_schema(table='...') -> understand table structure\n\
+                           5. execute_sql('CALL procedure_name(...)') -> invoke procedure\n\n\
+                           KEY PATTERNS:\n\
+                           • Use include_details=false for quick discovery\n\
+                           • Use include_details=true to examine procedure signatures and implementation\n\
+                           • Schema parameter defaults vary by database (public/current/main/dbo)\n\
+                           • Procedure names and types help identify callable routines vs. triggers\n\n\
+                           BEST PRACTICES:\n\
+                           • Check procedure_type to distinguish PROCEDURE from FUNCTION (return values differ)\n\
+                           • Review parameter_list before calling to understand input requirements\n\
+                           • Use language field to understand implementation (plpgsql, mysql, tsql, etc.)\n\
+                           • Call list_schemas() first if you're unsure about schema names"
                         .to_string(),
                 },
             },

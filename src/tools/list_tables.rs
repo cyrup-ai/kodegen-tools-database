@@ -139,7 +139,15 @@ impl Tool for ListTablesTool {
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {
-        vec![]
+        vec![PromptArgument {
+            name: "database_type".to_string(),
+            title: None,
+            description: Some(
+                "Optional database system to focus examples on (e.g., 'PostgreSQL', 'MySQL', 'SQLite', 'SQL Server')"
+                    .to_string(),
+            ),
+            required: Some(false),
+        }]
     }
 
     async fn prompt(&self, _args: Self::PromptArgs) -> Result<Vec<PromptMessage>, McpError> {
@@ -147,26 +155,35 @@ impl Tool for ListTablesTool {
             PromptMessage {
                 role: PromptMessageRole::User,
                 content: PromptMessageContent::text(
-                    "How do I see what tables are available in a database?",
+                    "How do I discover and list tables in different database schemas?",
                 ),
             },
             PromptMessage {
                 role: PromptMessageRole::Assistant,
                 content: PromptMessageContent::text(
-                    "Use the list_tables tool to discover available tables:\n\n\
-                     **Usage examples**:\n\
+                    "Use the list_tables tool to discover available tables in your database:\n\n\
+                     **Basic usage**:\n\
                      ```json\n\
-                     // List tables in specific schema\n\
-                     list_tables({\"schema\": \"public\"})\n\n\
                      // List tables in default schema\n\
                      list_tables({})\n\
                      ```\n\n\
-                     **What happens when schema is omitted**:\n\
-                     - **PostgreSQL**: Uses 'public' schema\n\
-                     - **MySQL/MariaDB**: Uses currently connected database\n\
-                     - **SQLite**: Uses 'main' (only schema available)\n\
-                     - **SQL Server**: Uses 'dbo' schema\n\n\
-                     **Example response**:\n\
+                     **Database-specific defaults**:\n\
+                     - PostgreSQL: Uses 'public' schema\n\
+                     - MySQL/MariaDB: Uses current DATABASE()\n\
+                     - SQLite: Uses 'main' (only schema available)\n\
+                     - SQL Server: Uses 'dbo' schema\n\n\
+                     **Schema-specific queries**:\n\
+                     ```json\n\
+                     // PostgreSQL - query specific schema\n\
+                     list_tables({\"schema\": \"public\"})\n\
+                     list_tables({\"schema\": \"information_schema\"})\n\n\
+                     // MySQL - query different database\n\
+                     list_tables({\"schema\": \"mysql\"})\n\n\
+                     // SQL Server - query specific schema\n\
+                     list_tables({\"schema\": \"dbo\"})\n\
+                     list_tables({\"schema\": \"sys\"})\n\
+                     ```\n\n\
+                     **Response format**:\n\
                      ```json\n\
                      {\n\
                        \"tables\": [\"users\", \"posts\", \"comments\"],\n\
@@ -174,11 +191,15 @@ impl Tool for ListTablesTool {
                        \"count\": 3\n\
                      }\n\
                      ```\n\n\
-                     **Discovery workflow**:\n\
-                     1. list_schemas({}) - see what schemas/databases exist\n\
-                     2. list_tables({\"schema\": \"public\"}) - see tables in chosen schema\n\
-                     3. describe_table({...}) - explore structure of interesting tables\n\
-                     4. Execute SQL queries on discovered tables",
+                     **Common workflow**:\n\
+                     1. list_tables({}) - explore default schema tables\n\
+                     2. describe_table({\"table\": \"users\"}) - inspect table structure\n\
+                     3. execute_sql({\"sql\": \"SELECT ...\"}) - query the data\n\n\
+                     **Important notes**:\n\
+                     - Omitting schema parameter uses database's default (shown above)\n\
+                     - Schema names are case-sensitive in PostgreSQL, case-insensitive in MySQL\n\
+                     - System schemas (information_schema, sys) are queryable but contain metadata\n\
+                     - Response includes count for quick validation",
                 ),
             },
         ])
