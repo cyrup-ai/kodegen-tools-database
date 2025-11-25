@@ -1,6 +1,6 @@
 [package]
 name = "kodegen_tools_database"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2024"
 description = "KODEGEN.ᴀɪ: Memory-efficient, Blazing-Fast, MCP tools for code generation agents."
 authors = ["KODEGEN.ᴀɪ"]
@@ -80,6 +80,7 @@ chrono = "0.4"
 
 [dev-dependencies]
 kodegen_mcp_client = { version = "0.3" }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 chrono = { version = "0.4", features = ["serde"] }

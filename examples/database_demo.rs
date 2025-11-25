@@ -10,7 +10,8 @@
 //!
 //! # Prerequisites
 //!
-//! This example requires a running PostgreSQL database:
+//! This example demonstrates PostgreSQL features but can also run with the default
+//! in-memory SQLite database. For full PostgreSQL testing:
 //!
 //! ```bash
 //! cd packages/tools-database
@@ -25,7 +26,8 @@
 //! # Architecture
 //!
 //! Database tools maintain a connection pool at the server level.
-//! The server is started with `--database-dsn` flag pointing to ONE database.
+//! The server can be started with `--database-dsn` flag pointing to ONE database,
+//! or will default to an in-memory SQLite database if not specified.
 //! All tools then operate against that pre-configured connection pool.
 //!
 //! This design enables:
@@ -172,7 +174,7 @@ async fn test_database_tools(client: &common::LoggingClient) -> Result<()> {
     // Tool 3: GET_TABLE_SCHEMA
     info!("\n[3/8] Testing get_table_schema on 'employees' table...");
     client
-        .call_tool(DB_GET_TABLE_SCHEMA, json!({ "table": "employees" }))
+        .call_tool(DB_TABLE_SCHEMA, json!({ "table": "employees" }))
         .await
         .context("get_table_schema failed")?;
     info!("✅ get_table_schema completed");
@@ -180,7 +182,7 @@ async fn test_database_tools(client: &common::LoggingClient) -> Result<()> {
     // Tool 4: GET_TABLE_INDEXES
     info!("\n[4/8] Testing get_table_indexes on 'employees' table...");
     client
-        .call_tool(DB_GET_TABLE_INDEXES, json!({ "table": "employees" }))
+        .call_tool(DB_TABLE_INDEXES, json!({ "table": "employees" }))
         .await
         .context("get_table_indexes failed")?;
     info!("✅ get_table_indexes completed");
@@ -215,7 +217,7 @@ async fn test_database_tools(client: &common::LoggingClient) -> Result<()> {
     // Tool 7: GET_POOL_STATS
     info!("\n[7/8] Testing get_pool_stats...");
     client
-        .call_tool(DB_GET_POOL_STATS, json!({}))
+        .call_tool(DB_POOL_STATS, json!({}))
         .await
         .context("get_pool_stats failed")?;
     info!("✅ get_pool_stats completed");
@@ -223,7 +225,7 @@ async fn test_database_tools(client: &common::LoggingClient) -> Result<()> {
     // Tool 8: GET_STORED_PROCEDURES
     info!("\n[8/8] Testing get_stored_procedures...");
     client
-        .call_tool(DB_GET_STORED_PROCEDURES, json!({}))
+        .call_tool(DB_STORED_PROCEDURES, json!({}))
         .await
         .context("get_stored_procedures failed")?;
     info!("✅ get_stored_procedures completed");

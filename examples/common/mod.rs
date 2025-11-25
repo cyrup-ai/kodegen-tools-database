@@ -4,6 +4,7 @@
 
 use anyhow::{Context, Result};
 use kodegen_mcp_client::{KodegenClient, KodegenConnection, create_streamable_client};
+use reqwest::header::HeaderMap;
 use rmcp::model::{CallToolResult, ServerInfo};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex as StdMutex, OnceLock};
@@ -158,7 +159,8 @@ pub async fn connect_with_retry(
     loop {
         attempt += 1;
 
-        match create_streamable_client(url).await {
+        let headers = HeaderMap::new();
+        match create_streamable_client(url, headers).await {
             Ok(result) => {
                 eprintln!(
                     "✅ Connected to HTTP server in {:?} (attempt {})",

@@ -47,11 +47,14 @@ cargo install --path .
 
 ### Running the Server
 
-The database server requires a `DATABASE_DSN` environment variable:
+The database server uses the `DATABASE_DSN` environment variable to connect to a database. If not provided, it defaults to an in-memory SQLite database (`sqlite::memory:`):
 
 ```bash
-# Basic usage
+# Basic usage with PostgreSQL
 DATABASE_DSN="postgres://user:pass@localhost:5432/mydb" kodegen-database
+
+# Or use the default in-memory SQLite database (no external database required)
+kodegen-database
 
 # With SSH tunnel
 SSH_HOST="bastion.example.com" \

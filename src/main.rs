@@ -3,8 +3,8 @@
 // This binary serves database query and schema exploration tools over HTTP/HTTPS transport.
 // Managed by kodegend daemon, typically running on port 30446.
 //
-// REQUIRED: DATABASE_DSN environment variable must be set.
-// OPTIONAL: SSH_* environment variables for SSH tunnel support.
+// Optional: DATABASE_DSN environment variable (defaults to sqlite::memory:)
+// Optional: SSH_* environment variables for SSH tunnel support.
 
 use anyhow::{Result, Context};
 use kodegen_server_http::{run_http_server, Managers, RouterSet, ShutdownHook, register_tool};
@@ -136,7 +136,7 @@ async fn main() -> Result<()> {
         let mut prompt_router = PromptRouter::new();
         let managers = Managers::new();
 
-        // Get DATABASE_DSN from environment (defaults to in-memory SQLite)
+        // Get DATABASE_DSN from environment (defaults to SQLite in-memory)
         let dsn = std::env::var("DATABASE_DSN")
             .unwrap_or_else(|_| {
                 log::info!("DATABASE_DSN not set, defaulting to sqlite::memory:");

@@ -288,7 +288,9 @@ pub fn parse_dsn(dsn: &str) -> Result<DSNInfo> {
 }
 
 fn parse_sqlite_dsn(dsn: &str) -> Result<DSNInfo> {
-    // SQLite format: sqlite::memory: or sqlite:///path or sqlite://:memory:
+    // SQLite DSN formats:
+    //   - In-memory: sqlite::memory: or sqlite://:memory:
+    //   - File-based: sqlite:///path/to/file.db or sqlite:/path/to/file.db
     let path_part = if let Some(stripped) = dsn.strip_prefix("sqlite://") {
         stripped
     } else if let Some(stripped) = dsn.strip_prefix("sqlite:") {
