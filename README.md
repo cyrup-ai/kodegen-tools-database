@@ -24,7 +24,7 @@ Part of [KODEGEN.ᴀɪ](https://github.com/cyrup-ai/kodegen) - A Rust-native MCP
 
 ## Installation
 
-### As Part of KODEGEN.ᴀɪ
+### As Part of KODEGEN.ᴀɪ 
 
 Install the complete KODEGEN.ᴀɪ toolkit (recommended):
 
