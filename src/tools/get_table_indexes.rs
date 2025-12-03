@@ -4,11 +4,11 @@ use crate::schema_queries::get_indexes_query;
 use crate::tools::helpers::resolve_schema_default;
 use crate::tools::timeout::execute_with_timeout;
 use crate::types::{DatabaseType, TableIndex};
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
-use kodegen_mcp_schema::database::{GetTableIndexesArgs, GetTableIndexesPromptArgs};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use kodegen_mcp_schema::ToolArgs;
+use kodegen_mcp_schema::database::{GetTableIndexesArgs, GetTableIndexesPromptArgs, GetTableIndexesOutput, IndexInfo};
 use kodegen_config_manager::ConfigManager;
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::json;
+use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use sqlx::{AnyPool, Row};
 use std::sync::Arc;
 use std::time::Duration;
@@ -60,7 +60,9 @@ impl Tool for GetTableIndexesTool {
         true // Queries external database
     }
 
-    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) 
+        -> Result<ToolResponse<<Self::Args as ToolArgs>::Output>, McpError> 
+    {
         // Use stored database type
         let db_type = self.db_type;
 
@@ -153,10 +155,8 @@ impl Tool for GetTableIndexesTool {
             }
         }
 
-        let mut contents = Vec::new();
-        
-        // Human-readable summary
-        let summary = format!(
+        // Human-readable display
+        let display = format!(
             "🔍 Indexes on {}.{}\n\n\
              Found {} indexes:\n\
              {}",
@@ -181,20 +181,26 @@ impl Tool for GetTableIndexesTool {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        contents.push(Content::text(summary));
         
-        // JSON metadata
-        let metadata = json!({
-            "table": args.table,
-            "schema": schema,
-            "indexes": indexes,
-            "index_count": indexes.len()
-        });
-        let json_str = serde_json::to_string_pretty(&metadata)
-            .unwrap_or_else(|_| "{}".to_string());
-        contents.push(Content::text(json_str));
+        // Convert TableIndex to IndexInfo
+        let index_info: Vec<IndexInfo> = indexes.iter()
+            .map(|idx| IndexInfo {
+                name: idx.index_name.clone(),
+                columns: idx.column_names.clone(),
+                unique: idx.is_unique,
+                is_primary: idx.is_primary,
+            })
+            .collect();
         
-        Ok(contents)
+        // Create typed output
+        let output = GetTableIndexesOutput {
+            schema: schema.clone(),
+            table: args.table.clone(),
+            indexes: index_info,
+            count: indexes.len(),
+        };
+        
+        Ok(ToolResponse::new(display, output))
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

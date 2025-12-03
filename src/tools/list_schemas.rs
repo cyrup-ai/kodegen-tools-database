@@ -1,10 +1,10 @@
 //! ListSchemas tool for database schema exploration
 
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
-use kodegen_mcp_schema::database::{ListSchemasArgs, ListSchemasPromptArgs};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use kodegen_mcp_schema::ToolArgs;
+use kodegen_mcp_schema::database::{ListSchemasArgs, ListSchemasPromptArgs, ListSchemasOutput};
 use kodegen_config_manager::ConfigManager;
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::json;
+use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use sqlx::{AnyPool, Row};
 use std::sync::Arc;
 use std::time::Duration;
@@ -71,38 +71,31 @@ impl Tool for ListSchemasTool {
         false
     }
 
-    async fn execute(&self, _args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, _args: Self::Args, _ctx: ToolExecutionContext) 
+        -> Result<ToolResponse<<Self::Args as ToolArgs>::Output>, McpError> 
+    {
         // Use stored database type
         let db_type = self.db_type;
 
         // SQLite special case - no query needed
         if matches!(db_type, DatabaseType::SQLite) {
             let schemas = vec!["main".to_string()];
-            let mut contents = Vec::new();
+            let count = schemas.len();
             
             // Human-readable summary
-            let summary = format!(
+            let display = format!(
                 "🗄️  Available Schemas\n\n\
                  Found {} schema:\n\
                  {}",
-                schemas.len(),
+                count,
                 schemas.iter()
                     .map(|s| format!("  • {}", s))
                     .collect::<Vec<_>>()
                     .join("\n")
             );
-            contents.push(Content::text(summary));
             
-            // JSON metadata
-            let metadata = json!({
-                "schemas": schemas,
-                "count": schemas.len()
-            });
-            let json_str = serde_json::to_string_pretty(&metadata)
-                .unwrap_or_else(|_| "{}".to_string());
-            contents.push(Content::text(json_str));
-            
-            return Ok(contents);
+            let output = ListSchemasOutput { schemas, count };
+            return Ok(ToolResponse::new(display, output));
         }
 
         // Get SQL query from centralized schema_queries module
@@ -130,31 +123,22 @@ impl Tool for ListSchemasTool {
             .filter_map(|row| row.try_get("schema_name").ok())
             .collect();
 
-        let mut contents = Vec::new();
+        let count = schemas.len();
         
         // Human-readable summary
-        let summary = format!(
+        let display = format!(
             "🗄️  Available Schemas\n\n\
              Found {} schemas:\n\
              {}",
-            schemas.len(),
+            count,
             schemas.iter()
                 .map(|s| format!("  • {}", s))
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        contents.push(Content::text(summary));
         
-        // JSON metadata
-        let metadata = json!({
-            "schemas": schemas,
-            "count": schemas.len()
-        });
-        let json_str = serde_json::to_string_pretty(&metadata)
-            .unwrap_or_else(|_| "{}".to_string());
-        contents.push(Content::text(json_str));
-        
-        Ok(contents)
+        let output = ListSchemasOutput { schemas, count };
+        Ok(ToolResponse::new(display, output))
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

@@ -1,10 +1,10 @@
 //! ListTables tool for database table exploration
 
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
-use kodegen_mcp_schema::database::{ListTablesArgs, ListTablesPromptArgs};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use kodegen_mcp_schema::ToolArgs;
+use kodegen_mcp_schema::database::{ListTablesArgs, ListTablesPromptArgs, ListTablesOutput, TableInfo};
 use kodegen_config_manager::ConfigManager;
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::json;
+use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use sqlx::{AnyPool, Row};
 use std::sync::Arc;
 use std::time::Duration;
@@ -69,7 +69,9 @@ impl Tool for ListTablesTool {
         false
     }
 
-    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) 
+        -> Result<ToolResponse<<Self::Args as ToolArgs>::Output>, McpError> 
+    {
         // Use stored database type
         let db_type = self.db_type;
 
@@ -114,28 +116,30 @@ impl Tool for ListTablesTool {
             .filter_map(|row| row.try_get("table_name").ok())
             .collect();
 
-        let mut contents = Vec::new();
-
-        // Human-readable summary
-        let summary = format!(
+        // Human-readable display
+        let display = format!(
             "\x1b[36m󰓅 Tables: {}\x1b[0m\n 󰈙 Total: {} · Schema: {}",
             resolved_schema,
             tables.len(),
             resolved_schema
         );
-        contents.push(Content::text(summary));
         
-        // JSON metadata
-        let metadata = json!({
-            "tables": tables,
-            "schema": resolved_schema,
-            "count": tables.len()
-        });
-        let json_str = serde_json::to_string_pretty(&metadata)
-            .unwrap_or_else(|_| "{}".to_string());
-        contents.push(Content::text(json_str));
+        // Convert Vec<String> to Vec<TableInfo>
+        let table_info: Vec<TableInfo> = tables.iter()
+            .map(|name| TableInfo {
+                name: name.clone(),
+                table_type: None,
+            })
+            .collect();
         
-        Ok(contents)
+        // Create typed output
+        let output = ListTablesOutput {
+            schema: resolved_schema,
+            tables: table_info,
+            count: tables.len(),
+        };
+        
+        Ok(ToolResponse::new(display, output))
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

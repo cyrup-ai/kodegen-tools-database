@@ -5,11 +5,11 @@ use crate::schema_queries::get_stored_procedures_query;
 use crate::tools::helpers::resolve_schema_default;
 use crate::tools::timeout::execute_with_timeout;
 use crate::types::{DatabaseType, StoredProcedure};
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
-use kodegen_mcp_schema::database::{GetStoredProceduresArgs, GetStoredProceduresPromptArgs};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use kodegen_mcp_schema::ToolArgs;
+use kodegen_mcp_schema::database::{GetStoredProceduresArgs, GetStoredProceduresPromptArgs, GetStoredProceduresOutput, ProcedureInfo};
 use kodegen_config_manager::ConfigManager;
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::json;
+use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use sqlx::{AnyPool, Row};
 use std::sync::Arc;
 use std::time::Duration;
@@ -61,7 +61,9 @@ impl Tool for GetStoredProceduresTool {
         true // Queries external database
     }
 
-    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) 
+        -> Result<ToolResponse<<Self::Args as ToolArgs>::Output>, McpError> 
+    {
         // Use stored database type
         let db_type = self.db_type;
 
@@ -131,28 +133,34 @@ impl Tool for GetStoredProceduresTool {
             })
             .collect::<Result<Vec<_>, DatabaseError>>()?;
 
-        let mut contents = Vec::new();
-
-        // Human-readable summary with ANSI color codes and Nerd Font icons
-        let summary = format!(
+        // Human-readable display
+        let display = format!(
             "\x1b[36m󰞔 Stored Procedures: {}\x1b[0m\n ℹ Total: {} · Schema: {}",
             schema,
             procedures.len(),
             schema
         );
-        contents.push(Content::text(summary));
         
-        // JSON metadata
-        let metadata = json!({
-            "schema": schema,
-            "procedures": procedures,
-            "count": procedures.len()
-        });
-        let json_str = serde_json::to_string_pretty(&metadata)
-            .unwrap_or_else(|_| "{}".to_string());
-        contents.push(Content::text(json_str));
+        // Convert StoredProcedure to ProcedureInfo
+        let procedure_info: Vec<ProcedureInfo> = procedures.iter()
+            .map(|proc| ProcedureInfo {
+                name: proc.procedure_name.clone(),
+                procedure_type: proc.procedure_type.clone(),
+                language: proc.language.clone(),
+                parameters: proc.parameter_list.clone(),
+                return_type: proc.return_type.clone(),
+                definition: proc.definition.clone(),
+            })
+            .collect();
         
-        Ok(contents)
+        // Create typed output
+        let output = GetStoredProceduresOutput {
+            schema: schema.clone(),
+            procedures: procedure_info,
+            count: procedures.len(),
+        };
+        
+        Ok(ToolResponse::new(display, output))
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

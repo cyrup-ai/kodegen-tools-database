@@ -13,9 +13,10 @@ use helpers::should_use_transaction;
 use crate::{
     apply_row_limit, split_sql_statements, validate_readonly_sql,
 };
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
-use kodegen_mcp_schema::database::{ExecuteSQLArgs, ExecuteSQLPromptArgs};
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use kodegen_mcp_schema::ToolArgs;
+use kodegen_mcp_schema::database::{ExecuteSQLArgs, ExecuteSQLPromptArgs, ExecuteSQLOutput};
+use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 
 
 impl Tool for ExecuteSQLTool {
@@ -59,7 +60,9 @@ impl Tool for ExecuteSQLTool {
         true // Network database connection
     }
 
-    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) 
+        -> Result<ToolResponse<<Self::Args as ToolArgs>::Output>, McpError> 
+    {
         let start_time = std::time::Instant::now();
 
         // 1. Get configuration
@@ -110,30 +113,22 @@ impl Tool for ExecuteSQLTool {
             }
         };
         
-        // 7. Convert Value to Vec<Content>
-        let mut contents = Vec::new();
-        
-        // Extract values from result_value
-        let row_count = result_value["row_count"].as_u64().unwrap_or(0);
+        // 7. Deserialize Value into ExecuteSQLOutput
+        let output: ExecuteSQLOutput = serde_json::from_value(result_value)
+            .map_err(|e| McpError::Other(anyhow::anyhow!("Failed to deserialize output: {}", e)))?;
 
         // Calculate execution time
         let elapsed_ms = start_time.elapsed().as_millis();
 
-        // Human-readable summary with ANSI colors and Nerd Font icons
-        let summary = format!(
+        // Human-readable display
+        let display = format!(
             "\x1b[36m SQL Executed\x1b[0m\n\
              Rows: {} · Time: {}ms",
-            row_count,
+            output.row_count,
             elapsed_ms
         );
-        contents.push(Content::text(summary));
         
-        // JSON metadata
-        let json_str = serde_json::to_string_pretty(&result_value)
-            .unwrap_or_else(|_| "{}".to_string());
-        contents.push(Content::text(json_str));
-        
-        Ok(contents)
+        Ok(ToolResponse::new(display, output))
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

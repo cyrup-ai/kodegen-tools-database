@@ -5,11 +5,12 @@ use crate::schema_queries::get_table_schema_query;
 use crate::tools::helpers::resolve_schema_default;
 use crate::tools::timeout::execute_with_timeout;
 use crate::types::{DatabaseType, TableColumn};
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
-use kodegen_mcp_schema::database::{GetTableSchemaArgs, GetTableSchemaPromptArgs};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use kodegen_mcp_schema::ToolArgs;
+use kodegen_mcp_schema::database::{GetTableSchemaArgs, GetTableSchemaPromptArgs, GetTableSchemaOutput, ColumnInfo};
 use kodegen_config_manager::ConfigManager;
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::json;
+use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+
 use sqlx::{AnyPool, Row};
 use std::sync::Arc;
 use std::time::Duration;
@@ -61,7 +62,9 @@ impl Tool for GetTableSchemaTool {
         true // Queries external database
     }
 
-    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) 
+        -> Result<ToolResponse<<Self::Args as ToolArgs>::Output>, McpError> 
+    {
         // Use stored database type
         let db_type = self.db_type;
 
@@ -127,10 +130,8 @@ impl Tool for GetTableSchemaTool {
             })
             .collect::<Result<Vec<_>, DatabaseError>>()?;
 
-        let mut contents = Vec::new();
-        
-        // Human-readable summary
-        let summary = format!(
+        // Human-readable display
+        let display = format!(
             "📋 Table Schema: {}.{}\n\n\
              Columns: {}\n\
              {}",
@@ -147,20 +148,27 @@ impl Tool for GetTableSchemaTool {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        contents.push(Content::text(summary));
         
-        // JSON metadata
-        let metadata = json!({
-            "table": args.table,
-            "schema": schema,
-            "columns": columns,
-            "column_count": columns.len()
-        });
-        let json_str = serde_json::to_string_pretty(&metadata)
-            .unwrap_or_else(|_| "{}".to_string());
-        contents.push(Content::text(json_str));
+        // Convert TableColumn to ColumnInfo
+        let column_info: Vec<ColumnInfo> = columns.iter()
+            .map(|c| ColumnInfo {
+                name: c.column_name.clone(),
+                data_type: c.data_type.clone(),
+                nullable: c.is_nullable != "NO",
+                default_value: c.column_default.clone(),
+                is_primary_key: false, // TableColumn doesn't track this
+            })
+            .collect();
         
-        Ok(contents)
+        // Create typed output
+        let output = GetTableSchemaOutput {
+            schema: schema.clone(),
+            table: args.table.clone(),
+            columns: column_info,
+            column_count: columns.len(),
+        };
+        
+        Ok(ToolResponse::new(display, output))
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {
