@@ -1,6 +1,6 @@
 [package]
 name = "kodegen_tools_database"
-version = "0.5.4"
+version = "0.6.0"
 edition = "2024"
 description = "KODEGEN.ᴀɪ: Memory-efficient, Blazing-Fast, MCP tools for code generation agents."
 authors = ["KODEGEN.ᴀɪ"]
@@ -29,11 +29,11 @@ macos = "public.app-category.developer-tools"
 
 [dependencies]
 # Core kodegen
-kodegen_mcp_tool = { version = "0.5" }
-kodegen_mcp_schema = { version = "0.5" }
-kodegen_config_manager = { version = "0.5" }
-kodegen_utils = { version = "0.5" }
-kodegen_server_http = { version = "0.5" }
+kodegen_mcp_tool = { version = "0.6" }
+kodegen_mcp_schema = { version = "0.6" }
+kodegen_config_manager = { version = "0.6" }
+kodegen_utils = { version = "0.6" }
+kodegen_server_http = { version = "0.6" }
 
 # Security - secret value wrapper for passwords/credentials
 secrecy = "0.10"
@@ -79,7 +79,7 @@ chrono = "0.4"
 
 
 [dev-dependencies]
-kodegen_mcp_client = { version = "0.5" }
+kodegen_mcp_client = { version = "0.6" }
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 http = "1"
 uuid = { version = "1", features = ["v4"] }
