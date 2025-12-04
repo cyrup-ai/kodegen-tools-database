@@ -15,7 +15,7 @@ use crate::{
 };
 use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
 use kodegen_mcp_schema::ToolArgs;
-use kodegen_mcp_schema::database::{ExecuteSQLArgs, ExecuteSQLPromptArgs, ExecuteSQLOutput};
+use kodegen_mcp_schema::database::{ExecuteSQLArgs, ExecuteSQLPromptArgs};
 use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 
 
@@ -101,8 +101,8 @@ impl Tool for ExecuteSQLTool {
         let statements = split_sql_statements(&sql, db_type)
             .map_err(|e| anyhow::anyhow!("SQL parse error: {}", e))?;
 
-        // 6. Execute single or multi-statement (get Value from internal methods)
-        let result_value = if statements.len() == 1 {
+        // 6. Execute single or multi-statement (returns typed ExecuteSQLOutput directly)
+        let mut output = if statements.len() == 1 {
             self.execute_single(&statements[0]).await?
         } else {
             // Route based on statement types
@@ -112,13 +112,10 @@ impl Tool for ExecuteSQLTool {
                 self.execute_multi_non_transactional(&statements).await?
             }
         };
-        
-        // 7. Deserialize Value into ExecuteSQLOutput
-        let output: ExecuteSQLOutput = serde_json::from_value(result_value)
-            .map_err(|e| McpError::Other(anyhow::anyhow!("Failed to deserialize output: {}", e)))?;
 
-        // Calculate execution time
-        let elapsed_ms = start_time.elapsed().as_millis();
+        // 7. Set execution time (executor methods set it to 0)
+        let elapsed_ms = start_time.elapsed().as_millis() as u64;
+        output.execution_time_ms = elapsed_ms;
 
         // Human-readable display
         let display = format!(

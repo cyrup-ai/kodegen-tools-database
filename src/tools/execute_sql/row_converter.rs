@@ -1,50 +1,40 @@
-//! Row to JSON conversion for SQL results
+//! Row to typed struct conversion for SQL results
 //!
-//! Converts sqlx AnyRow instances to JSON with proper type handling for
-//! PostgreSQL, MySQL, and SQLite.
+//! Converts sqlx AnyRow instances to typed SqlRow structs with proper type handling
+//! for PostgreSQL, MySQL, and SQLite.
 
-use base64::Engine as _; // For base64 encoding of binary data
 use crate::error::DatabaseError;
-use serde_json::{Value, json};
+use kodegen_mcp_schema::database::{SqlRow, SqlColumnValue, SqlValue};
 use sqlx::{Column, Row, TypeInfo};
 
-/// Convert a sqlx Row to a JSON object
+/// Convert a sqlx Row to a typed SqlRow structure
 ///
-/// Dynamically extracts column names and values, converting to appropriate JSON types.
-/// Handles NULL values gracefully by returning Value::Null.
-///
-/// # Type Name Variations
-/// Type names vary by database:
-/// - PostgreSQL: TEXT, INT4, INT8, BOOL, FLOAT8, etc.
-/// - MySQL: VARCHAR, INT, BIGINT, TINYINT, DOUBLE, etc.
-/// - SQLite: TEXT, INTEGER, REAL, BLOB, etc.
+/// Maps SQL types to the SqlValue enum for type-safe representation.
+/// Handles all major database types: PostgreSQL, MySQL, SQLite.
 ///
 /// # Arguments
 /// * `row` - sqlx AnyRow to convert
 ///
 /// # Returns
-/// JSON Value representing the row as an object with column names as keys
+/// Typed SqlRow with column names and values
 ///
 /// # Errors
-/// Returns error if:
-/// - Column type is unsupported
-/// - Type conversion fails
-/// - Column extraction fails
-pub fn row_to_json(row: &sqlx::any::AnyRow) -> Result<Value, DatabaseError> {
-    let mut map = serde_json::Map::new();
+/// Returns error if column type conversion fails
+pub fn row_to_typed(row: &sqlx::any::AnyRow) -> Result<SqlRow, DatabaseError> {
+    let mut columns = Vec::new();
 
     for column in row.columns() {
         let ordinal = column.ordinal();
         let name = column.name().to_string();
         let type_name = column.type_info().name();
 
-        // Match on database type names
+        // Match on database type names and convert to SqlValue
         let value = match type_name {
             // Text types (most databases)
             "TEXT" | "VARCHAR" | "CHAR" | "STRING" | "BPCHAR" | "NAME" | "CITEXT" => {
                 match row.try_get::<Option<String>, _>(ordinal) {
-                    Ok(Some(s)) => Value::String(s),
-                    Ok(None) => Value::Null,
+                    Ok(Some(s)) => SqlValue::Text(s),
+                    Ok(None) => SqlValue::Null,
                     Err(e) => {
                         return Err(DatabaseError::QueryError(format!(
                             "Failed to extract column '{}' as TEXT: {}",
@@ -56,8 +46,8 @@ pub fn row_to_json(row: &sqlx::any::AnyRow) -> Result<Value, DatabaseError> {
             // Integer types
             "INTEGER" | "INT" | "INT2" | "INT4" | "INT8" | "BIGINT" | "SMALLINT" | "MEDIUMINT"
             | "SERIAL" | "BIGSERIAL" => match row.try_get::<Option<i64>, _>(ordinal) {
-                Ok(Some(v)) => json!(v),
-                Ok(None) => Value::Null,
+                Ok(Some(v)) => SqlValue::Int(v),
+                Ok(None) => SqlValue::Null,
                 Err(e) => {
                     return Err(DatabaseError::QueryError(format!(
                         "Failed to extract column '{}' as INTEGER: {}",
@@ -67,8 +57,8 @@ pub fn row_to_json(row: &sqlx::any::AnyRow) -> Result<Value, DatabaseError> {
             },
             // Boolean types
             "BOOLEAN" | "BOOL" | "TINYINT(1)" => match row.try_get::<Option<bool>, _>(ordinal) {
-                Ok(Some(b)) => Value::Bool(b),
-                Ok(None) => Value::Null,
+                Ok(Some(b)) => SqlValue::Bool(b),
+                Ok(None) => SqlValue::Null,
                 Err(e) => {
                     return Err(DatabaseError::QueryError(format!(
                         "Failed to extract column '{}' as BOOLEAN: {}",
@@ -79,8 +69,8 @@ pub fn row_to_json(row: &sqlx::any::AnyRow) -> Result<Value, DatabaseError> {
             // Float types
             "REAL" | "FLOAT" | "FLOAT4" | "FLOAT8" | "DOUBLE" | "DOUBLE PRECISION" => {
                 match row.try_get::<Option<f64>, _>(ordinal) {
-                    Ok(Some(v)) => json!(v),
-                    Ok(None) => Value::Null,
+                    Ok(Some(v)) => SqlValue::Float(v),
+                    Ok(None) => SqlValue::Null,
                     Err(e) => {
                         return Err(DatabaseError::QueryError(format!(
                             "Failed to extract column '{}' as FLOAT: {}",
@@ -89,21 +79,20 @@ pub fn row_to_json(row: &sqlx::any::AnyRow) -> Result<Value, DatabaseError> {
                     }
                 }
             }
-            // DECIMAL/NUMERIC - sqlx::any doesn't support these types
-            // Try as f64 first (may lose precision for very large numbers)
+            // DECIMAL/NUMERIC - try as f64 first, fall back to string
             "NUMERIC" | "DECIMAL" | "NUMBER" => {
                 match row.try_get::<Option<f64>, _>(ordinal) {
-                    Ok(Some(v)) => json!(v),
-                    Ok(None) => Value::Null,
+                    Ok(Some(v)) => SqlValue::Float(v),
+                    Ok(None) => SqlValue::Null,
                     Err(_) => {
-                        // If f64 fails, try as string
+                        // If f64 fails, try as string to preserve precision
                         match row.try_get::<Option<String>, _>(ordinal) {
-                            Ok(Some(s)) => Value::String(s),
-                            Ok(None) => Value::Null,
+                            Ok(Some(s)) => SqlValue::Text(s),
+                            Ok(None) => SqlValue::Null,
                             Err(e) => {
                                 return Err(DatabaseError::QueryError(format!(
                                     "Failed to extract column '{}' as DECIMAL (tried f64 and string): {}. \
-                                 Consider using CAST({} AS TEXT) in your query.",
+                                     Consider using CAST({} AS TEXT) in your query.",
                                     name, e, name
                                 )));
                             }
@@ -111,16 +100,11 @@ pub fn row_to_json(row: &sqlx::any::AnyRow) -> Result<Value, DatabaseError> {
                     }
                 }
             }
-            // JSON types - parse as serde_json::Value
+            // JSON types - store as text (already JSON-formatted)
             "JSON" | "JSONB" => {
                 match row.try_get::<Option<String>, _>(ordinal) {
-                    Ok(Some(json_str)) => {
-                        serde_json::from_str(&json_str).unwrap_or_else(|e| {
-                            log::warn!("Failed to parse JSON column '{}': {}", name, e);
-                            Value::String(json_str) // Fallback to raw string
-                        })
-                    }
-                    Ok(None) => Value::Null,
+                    Ok(Some(json_str)) => SqlValue::Text(json_str),
+                    Ok(None) => SqlValue::Null,
                     Err(e) => {
                         return Err(DatabaseError::QueryError(format!(
                             "Failed to extract column '{}' as JSON: {}",
@@ -129,17 +113,11 @@ pub fn row_to_json(row: &sqlx::any::AnyRow) -> Result<Value, DatabaseError> {
                     }
                 }
             }
-            // Binary types - encode as base64 string
+            // Binary types - store as Vec<u8>
             "BYTEA" | "BLOB" | "BINARY" | "VARBINARY" => {
                 match row.try_get::<Option<Vec<u8>>, _>(ordinal) {
-                    Ok(Some(bytes)) => {
-                        let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                        json!({
-                            "type": "base64",
-                            "data": encoded
-                        })
-                    }
-                    Ok(None) => Value::Null,
+                    Ok(Some(bytes)) => SqlValue::Blob(bytes),
+                    Ok(None) => SqlValue::Null,
                     Err(e) => {
                         return Err(DatabaseError::QueryError(format!(
                             "Failed to extract column '{}' as BYTEA: {}",
@@ -151,8 +129,8 @@ pub fn row_to_json(row: &sqlx::any::AnyRow) -> Result<Value, DatabaseError> {
             // Date/Time types - extract as strings
             "TIMESTAMP" | "TIMESTAMPTZ" | "DATETIME" | "DATE" | "TIME" | "INTERVAL" => {
                 match row.try_get::<Option<String>, _>(ordinal) {
-                    Ok(Some(s)) => Value::String(s),
-                    Ok(None) => Value::Null,
+                    Ok(Some(s)) => SqlValue::Text(s),
+                    Ok(None) => SqlValue::Null,
                     Err(e) => {
                         return Err(DatabaseError::QueryError(format!(
                             "Failed to extract column '{}' as {}: {}",
@@ -163,8 +141,8 @@ pub fn row_to_json(row: &sqlx::any::AnyRow) -> Result<Value, DatabaseError> {
             }
             // UUID - extract as string
             "UUID" => match row.try_get::<Option<String>, _>(ordinal) {
-                Ok(Some(s)) => Value::String(s),
-                Ok(None) => Value::Null,
+                Ok(Some(s)) => SqlValue::Text(s),
+                Ok(None) => SqlValue::Null,
                 Err(e) => {
                     return Err(DatabaseError::QueryError(format!(
                         "Failed to extract column '{}' as UUID: {}",
@@ -184,8 +162,8 @@ pub fn row_to_json(row: &sqlx::any::AnyRow) -> Result<Value, DatabaseError> {
             }
         };
 
-        map.insert(name, value);
+        columns.push(SqlColumnValue { name, value });
     }
 
-    Ok(Value::Object(map))
+    Ok(SqlRow { columns })
 }

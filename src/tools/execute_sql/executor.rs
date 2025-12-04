@@ -5,11 +5,11 @@
 use crate::{
     DatabaseType, tools::timeout::execute_with_timeout,
 };
-use super::row_converter::row_to_json;
+use super::row_converter::row_to_typed;
 use kodegen_mcp_tool::error::McpError;
 use kodegen_config_manager::ConfigManager;
-use serde_json::{Value, json};
-use sqlx::AnyPool;
+use kodegen_mcp_schema::database::{ExecuteSQLOutput, SqlStatementError, SqlRow};
+use sqlx::{AnyPool, Row, Column};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -56,8 +56,8 @@ impl ExecuteSQLTool {
     /// * `sql` - SQL statement to execute
     ///
     /// # Returns
-    /// JSON object with rows and row_count
-    pub async fn execute_single(&self, sql: &str) -> Result<Value, McpError> {
+    /// Typed ExecuteSQLOutput with rows and row_count
+    pub async fn execute_single(&self, sql: &str) -> Result<ExecuteSQLOutput, McpError> {
         // Execute query with timeout
         let pool = self.pool.clone();
         let sql_owned = sql.to_string();
@@ -77,19 +77,27 @@ impl ExecuteSQLTool {
         )
         .await?;
 
-        // Convert rows to JSON
-        let json_rows: Result<Vec<Value>, _> = rows
+        // Extract column names
+        let columns = extract_column_names(&rows);
+
+        // Convert rows to typed SqlRow structures
+        let typed_rows: Vec<SqlRow> = rows
             .iter()
-            .map(|row| row_to_json(row).map_err(|e| anyhow::anyhow!("{}", e)))
-            .collect();
+            .map(|row| row_to_typed(row).map_err(|e| anyhow::anyhow!("{}", e)))
+            .collect::<Result<_, _>>()?;
 
-        let json_rows = json_rows?;
-        let row_count = json_rows.len();
+        let row_count = typed_rows.len();
 
-        Ok(json!({
-            "rows": json_rows,
-            "row_count": row_count
-        }))
+        Ok(ExecuteSQLOutput {
+            columns,
+            rows: typed_rows,
+            row_count,
+            affected_rows: None,
+            execution_time_ms: 0, // Caller will set this in mod.rs
+            executed_statements: None,
+            total_statements: None,
+            errors: None,
+        })
     }
 
     /// Execute multiple SQL statements within a transaction
@@ -101,8 +109,8 @@ impl ExecuteSQLTool {
     /// * `statements` - SQL statements to execute atomically
     ///
     /// # Returns
-    /// JSON object with rows, row_count, and execution statistics
-    pub async fn execute_multi_transactional(&self, statements: &[String]) -> Result<Value, McpError> {
+    /// Typed ExecuteSQLOutput with execution statistics
+    pub async fn execute_multi_transactional(&self, statements: &[String]) -> Result<ExecuteSQLOutput, McpError> {
         // Begin transaction with timeout
         let pool = self.pool.clone();
         let mut tx = execute_with_timeout(
@@ -116,11 +124,13 @@ impl ExecuteSQLTool {
             "Starting transaction",
         )
         .await?;
-        let mut all_rows = Vec::new();
+        
+        let mut all_rows: Vec<SqlRow> = Vec::new();
+        let mut all_columns: Vec<String> = Vec::new();
         let mut executed_statements = 0;
 
         for (index, statement) in statements.iter().enumerate() {
-            // Execute each statement with timeout (no retry - statements within transactions are atomic)
+            // Execute each statement with timeout
             let timeout_duration = self
                 .config
                 .get_value("db_query_timeout_secs")
@@ -147,10 +157,16 @@ impl ExecuteSQLTool {
                 Ok(rows) => {
                     executed_statements += 1;
                     if !rows.is_empty() {
+                        // Extract columns from first result set if not yet set
+                        if all_columns.is_empty() {
+                            all_columns = extract_column_names(&rows);
+                        }
+                        
+                        // Convert rows to typed structures
                         for row in &rows {
-                            let json_row =
-                                row_to_json(row).map_err(|e| anyhow::anyhow!("{}", e))?;
-                            all_rows.push(json_row);
+                            let typed_row = row_to_typed(row)
+                                .map_err(|e| anyhow::anyhow!("{}", e))?;
+                            all_rows.push(typed_row);
                         }
                     }
                 }
@@ -158,22 +174,26 @@ impl ExecuteSQLTool {
                     // Rollback transaction
                     let _ = tx.rollback().await;
 
-                    // Return error WITHOUT uncommitted data (transaction was rolled back)
-                    return Ok(json!({
-                        "success": false,
-                        "error": format!("Statement {} failed: {}", index + 1, e),
-                        "failed_statement": statement,
-                        "failed_at_index": index + 1,
-                        "executed_statements": executed_statements,
-                        "total_statements": statements.len(),
-                        "transaction_status": "rolled_back",
-                        "note": "All changes were rolled back due to error. No data was committed."
-                    }));
+                    // Return error with typed structure
+                    return Ok(ExecuteSQLOutput {
+                        columns: vec![],
+                        rows: vec![],
+                        row_count: 0,
+                        affected_rows: None,
+                        execution_time_ms: 0,
+                        executed_statements: Some(executed_statements),
+                        total_statements: Some(statements.len()),
+                        errors: Some(vec![SqlStatementError {
+                            statement_index: index + 1,
+                            statement: statement.clone(),
+                            error: format!("Statement {} failed: {}. Transaction rolled back. No data committed.", index + 1, e),
+                        }]),
+                    });
                 }
             }
         }
 
-        // Commit transaction with timeout (no retry - transaction commit is atomic)
+        // Commit transaction with timeout
         let timeout_duration = self
             .config
             .get_value("db_query_timeout_secs")
@@ -197,12 +217,17 @@ impl ExecuteSQLTool {
             }
         }
 
-        Ok(json!({
-            "rows": all_rows,
-            "row_count": all_rows.len(),
-            "executed_statements": executed_statements,
-            "total_statements": statements.len()
-        }))
+        let row_count = all_rows.len();
+        Ok(ExecuteSQLOutput {
+            columns: all_columns,
+            rows: all_rows,
+            row_count,
+            affected_rows: None,
+            execution_time_ms: 0,
+            executed_statements: Some(executed_statements),
+            total_statements: Some(statements.len()),
+            errors: None,
+        })
     }
 
     /// Execute multiple SQL statements WITHOUT transaction
@@ -214,13 +239,14 @@ impl ExecuteSQLTool {
     /// * `statements` - SQL statements to execute independently
     ///
     /// # Returns
-    /// JSON object with rows, row_count, errors array, and execution statistics
+    /// Typed ExecuteSQLOutput with rows, errors array, and execution statistics
     pub async fn execute_multi_non_transactional(
         &self,
         statements: &[String],
-    ) -> Result<Value, McpError> {
-        let mut all_rows = Vec::new();
-        let mut errors = Vec::new();
+    ) -> Result<ExecuteSQLOutput, McpError> {
+        let mut all_rows: Vec<SqlRow> = Vec::new();
+        let mut all_columns: Vec<String> = Vec::new();
+        let mut errors: Vec<SqlStatementError> = Vec::new();
         let mut executed_statements = 0;
 
         for (index, statement) in statements.iter().enumerate() {
@@ -247,31 +273,52 @@ impl ExecuteSQLTool {
                 Ok(rows) => {
                     executed_statements += 1;
                     if !rows.is_empty() {
+                        // Extract columns from first result set if not yet set
+                        if all_columns.is_empty() {
+                            all_columns = extract_column_names(&rows);
+                        }
+                        
+                        // Convert rows to typed structures
                         for row in &rows {
-                            let json_row =
-                                row_to_json(row).map_err(|e| anyhow::anyhow!("{}", e))?;
-                            all_rows.push(json_row);
+                            let typed_row = row_to_typed(row)
+                                .map_err(|e| anyhow::anyhow!("{}", e))?;
+                            all_rows.push(typed_row);
                         }
                     }
                 }
                 Err(e) => {
                     // Record error but continue execution
-                    errors.push(json!({
-                        "statement_index": index + 1,
-                        "statement": statement,
-                        "error": e.to_string()
-                    }));
+                    errors.push(SqlStatementError {
+                        statement_index: index + 1,
+                        statement: statement.clone(),
+                        error: e.to_string(),
+                    });
                 }
             }
         }
 
-        Ok(json!({
-            "rows": all_rows,
-            "row_count": all_rows.len(),
-            "executed_statements": executed_statements,
-            "total_statements": statements.len(),
-            "errors": errors,
-            "has_errors": !errors.is_empty()
-        }))
+        let row_count = all_rows.len();
+        Ok(ExecuteSQLOutput {
+            columns: all_columns,
+            rows: all_rows,
+            row_count,
+            affected_rows: None,
+            execution_time_ms: 0,
+            executed_statements: Some(executed_statements),
+            total_statements: Some(statements.len()),
+            errors: if errors.is_empty() { None } else { Some(errors) },
+        })
     }
+}
+
+/// Extract column names from sqlx rows
+fn extract_column_names(rows: &[sqlx::any::AnyRow]) -> Vec<String> {
+    if rows.is_empty() {
+        return vec![];
+    }
+    rows[0]
+        .columns()
+        .iter()
+        .map(|col| col.name().to_string())
+        .collect()
 }
