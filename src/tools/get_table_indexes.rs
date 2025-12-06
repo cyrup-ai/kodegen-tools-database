@@ -4,11 +4,10 @@ use crate::schema_queries::get_indexes_query;
 use crate::tools::helpers::resolve_schema_default;
 use crate::tools::timeout::execute_with_timeout;
 use crate::types::{DatabaseType, TableIndex};
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use kodegen_mcp_schema::{Tool, ToolExecutionContext, ToolResponse, McpError};
 use kodegen_mcp_schema::ToolArgs;
-use kodegen_mcp_schema::database::{GetTableIndexesArgs, GetTableIndexesPromptArgs, GetTableIndexesOutput, IndexInfo};
+use kodegen_mcp_schema::database::{GetTableIndexesArgs, GetTableIndexesOutput, IndexInfo, TableIndexesPrompts};
 use kodegen_config_manager::ConfigManager;
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use sqlx::{AnyPool, Row};
 use std::sync::Arc;
 use std::time::Duration;
@@ -40,7 +39,7 @@ impl GetTableIndexesTool {
 
 impl Tool for GetTableIndexesTool {
     type Args = GetTableIndexesArgs;
-    type PromptArgs = GetTableIndexesPromptArgs;
+    type Prompts = TableIndexesPrompts;
 
     fn name() -> &'static str {
         kodegen_mcp_schema::database::DB_TABLE_INDEXES
@@ -201,51 +200,5 @@ impl Tool for GetTableIndexesTool {
         };
         
         Ok(ToolResponse::new(display, output))
-    }
-
-    fn prompt_arguments() -> Vec<PromptArgument> {
-        vec![
-            PromptArgument {
-                name: "focus_area".to_string(),
-                title: None,
-                description: Some(
-                    "Optional focus area for examples: 'query_optimization', 'constraint_discovery', or 'schema_analysis'. \
-                     Tailor the teaching examples to specific use cases."
-                        .to_string(),
-                ),
-                required: Some(false),
-            },
-        ]
-    }
-
-    async fn prompt(&self, _args: Self::PromptArgs) -> Result<Vec<PromptMessage>, McpError> {
-        Ok(vec![
-            PromptMessage {
-                role: PromptMessageRole::User,
-                content: PromptMessageContent::Text {
-                    text: "When should I use get_table_indexes?".to_string(),
-                },
-            },
-            PromptMessage {
-                role: PromptMessageRole::Assistant,
-                content: PromptMessageContent::Text {
-                    text: "Use get_table_indexes to understand which columns are indexed. This helps you:\n\
-                           - Write optimized WHERE clauses (use indexed columns)\n\
-                           - Understand query performance implications\n\
-                           - Find primary keys for joins\n\
-                           - Identify unique constraints\n\n\
-                           Example: get_table_indexes(table='users', schema='public') returns:\n\
-                           - Primary key indexes (is_primary=true)\n\
-                           - Unique indexes (is_unique=true)\n\
-                           - Regular indexes\n\
-                           Each index shows which columns are included (column_names array).\n\n\
-                           Use this information to:\n\
-                           1. Choose indexed columns in WHERE clauses for faster queries\n\
-                           2. Understand join relationships via primary/foreign keys\n\
-                           3. Avoid duplicate values in unique-indexed columns"
-                        .to_string(),
-                },
-            },
-        ])
     }
 }

@@ -1,10 +1,9 @@
 //! ListSchemas tool for database schema exploration
 
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use kodegen_mcp_schema::{Tool, ToolExecutionContext, ToolResponse, McpError};
 use kodegen_mcp_schema::ToolArgs;
-use kodegen_mcp_schema::database::{ListSchemasArgs, ListSchemasPromptArgs, ListSchemasOutput};
+use kodegen_mcp_schema::database::{ListSchemasArgs, ListSchemasOutput, ListSchemasPrompts};
 use kodegen_config_manager::ConfigManager;
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use sqlx::{AnyPool, Row};
 use std::sync::Arc;
 use std::time::Duration;
@@ -49,7 +48,7 @@ impl ListSchemasTool {
 
 impl Tool for ListSchemasTool {
     type Args = ListSchemasArgs;
-    type PromptArgs = ListSchemasPromptArgs;
+    type Prompts = ListSchemasPrompts;
 
     fn name() -> &'static str {
         kodegen_mcp_schema::database::DB_LIST_SCHEMAS
@@ -139,116 +138,5 @@ impl Tool for ListSchemasTool {
         
         let output = ListSchemasOutput { schemas, count };
         Ok(ToolResponse::new(display, output))
-    }
-
-    fn prompt_arguments() -> Vec<PromptArgument> {
-        vec![
-            PromptArgument {
-                name: "db_type".to_string(),
-                title: Some("Database Type".to_string()),
-                description: Some(
-                    "Optional: Focus examples on a specific database type (e.g., 'postgresql', 'mysql', 'sqlite'). \
-                     Helps learn patterns relevant to your actual database system.".to_string(),
-                ),
-                required: Some(false),
-            },
-            PromptArgument {
-                name: "include_workflow".to_string(),
-                title: Some("Include Workflow".to_string()),
-                description: Some(
-                    "Optional: When true (default), shows the full schema discovery workflow \
-                     (list_schemas → list_tables → describe_table → query). \
-                     When false, focuses only on list_schemas capabilities.".to_string(),
-                ),
-                required: Some(false),
-            },
-        ]
-    }
-
-    async fn prompt(&self, args: Self::PromptArgs) -> Result<Vec<PromptMessage>, McpError> {
-        // Build customized assistant response based on arguments
-        let base_message = "Use the list_schemas tool to discover available schemas/databases:\n\n\
-                            **Usage**: list_schemas({})\n\n";
-        
-        // Part 1: Database-specific examples (filtered by db_type if provided)
-        let db_examples = if let Some(ref db_type) = args.db_type {
-            match db_type.to_lowercase().as_str() {
-                "postgresql" | "postgres" | "pg" => {
-                    "**PostgreSQL Specific**:\n\
-                     - Returns all user-created schemas (public, myapp, analytics, etc.)\n\
-                     - Automatically excludes system schemas (pg_catalog, information_schema)\n\
-                     - Useful for multi-tenant database architectures\n\n"
-                },
-                "mysql" | "mariadb" => {
-                    "**MySQL/MariaDB Specific**:\n\
-                     - Returns all databases you have GRANT permissions for\n\
-                     - No concept of schemas within databases (schemas = databases)\n\
-                     - List reflects your database user's privileges\n\n"
-                },
-                "sqlite" => {
-                    "**SQLite Specific**:\n\
-                     - Always returns ['main'] since SQLite has no schema concept\n\
-                     - For multi-database SQLite setups, use ATTACH DATABASE instead\n\
-                     - Schemas are effectively namespaced tables in a single file\n\n"
-                },
-                _ => {
-                    "**What it returns per database type**:\n\
-                     - **PostgreSQL**: User schemas like 'public', 'myapp', 'analytics' (excludes pg_catalog, information_schema)\n\
-                     - **MySQL/MariaDB**: All databases you have access to\n\
-                     - **SQLite**: Always returns ['main'] (SQLite has no schema concept)\n\n"
-                }
-            }
-        } else {
-            "**What it returns per database type**:\n\
-             - **PostgreSQL**: User schemas like 'public', 'myapp', 'analytics' (excludes pg_catalog, information_schema)\n\
-             - **MySQL/MariaDB**: All databases you have access to\n\
-             - **SQLite**: Always returns ['main'] (SQLite has no schema concept)\n\n"
-        };
-        
-        // Part 2: Example response (always included)
-        let example_response = "**Example response**:\n\
-                                ```json\n\
-                                {\n\
-                                  \"schemas\": [\"public\", \"analytics\", \"staging\"],\n\
-                                  \"count\": 3\n\
-                                }\n\
-                                ```\n\n";
-        
-        // Part 3: Workflow or isolated usage (conditional based on include_workflow)
-        let workflow_section = if args.include_workflow {
-            "**Typical schema discovery workflow**:\n\
-             1. list_schemas({}) - discover available schemas\n\
-             2. list_tables({\"schema\": \"public\"}) - see tables in a schema\n\
-             3. describe_table({\"schema\": \"public\", \"table\": \"users\"}) - explore table structure\n\
-             4. Execute SQL queries on discovered tables"
-        } else {
-            "**Key behavior**:\n\
-             - list_schemas() takes no arguments\n\
-             - Filters results automatically based on your database user's permissions\n\
-             - Safe read-only operation (never modifies data)\n\
-             - Works with any database type (PostgreSQL, MySQL, SQLite, SQL Server, MariaDB)"
-        };
-        
-        // Build final assistant message
-        let assistant_content = format!(
-            "{}{}{}{}",
-            base_message,
-            db_examples,
-            example_response,
-            workflow_section
-        );
-        
-        Ok(vec![
-            PromptMessage {
-                role: PromptMessageRole::User,
-                content: PromptMessageContent::text(
-                    "How do I discover what databases/schemas are available to query?",
-                ),
-            },
-            PromptMessage {
-                role: PromptMessageRole::Assistant,
-                content: PromptMessageContent::text(assistant_content),
-            },
-        ])
     }
 }

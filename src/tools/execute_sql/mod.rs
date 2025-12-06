@@ -13,15 +13,14 @@ use helpers::should_use_transaction;
 use crate::{
     apply_row_limit, split_sql_statements, validate_readonly_sql,
 };
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use kodegen_mcp_schema::{Tool, ToolExecutionContext, ToolResponse, McpError};
 use kodegen_mcp_schema::ToolArgs;
-use kodegen_mcp_schema::database::{ExecuteSQLArgs, ExecuteSQLPromptArgs};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use kodegen_mcp_schema::database::{ExecuteSQLArgs, DbExecuteSqlPrompts};
 
 
 impl Tool for ExecuteSQLTool {
     type Args = ExecuteSQLArgs;
-    type PromptArgs = ExecuteSQLPromptArgs;
+    type Prompts = DbExecuteSqlPrompts;
 
     fn name() -> &'static str {
         kodegen_mcp_schema::database::DB_EXECUTE_SQL
@@ -128,54 +127,4 @@ impl Tool for ExecuteSQLTool {
         Ok(ToolResponse::new(display, output))
     }
 
-    fn prompt_arguments() -> Vec<PromptArgument> {
-        vec![PromptArgument {
-            name: "database_type".to_string(),
-            title: None,
-            description: Some(
-                "Database type to show examples for (postgres, mysql, sqlite)".to_string(),
-            ),
-            required: Some(false),
-        }]
-    }
-
-    async fn prompt(&self, _args: Self::PromptArgs) -> Result<Vec<PromptMessage>, McpError> {
-        Ok(vec![
-            PromptMessage {
-                role: PromptMessageRole::User,
-                content: PromptMessageContent::text(
-                    "How do I use execute_sql to query and modify a database?",
-                ),
-            },
-            PromptMessage {
-                role: PromptMessageRole::Assistant,
-                content: PromptMessageContent::text(
-                    "The execute_sql tool executes SQL queries and returns results as JSON:\n\n\
-                     BASIC USAGE:\n\
-                     1. Single query:\n   \
-                        execute_sql({\"sql\": \"SELECT * FROM users LIMIT 10\"})\n   \
-                        Returns: {\"rows\": [{...}, {...}], \"row_count\": 10}\n\n\
-                     2. Multi-statement (uses transaction):\n   \
-                        execute_sql({\"sql\": \"BEGIN; INSERT INTO logs VALUES (1, 'test'); COMMIT;\"})\n   \
-                        All statements execute atomically - rolls back on error\n\n\
-                     3. Data modification:\n   \
-                        execute_sql({\"sql\": \"UPDATE users SET status = 'active' WHERE id = 5\"})\n\n\
-                     FEATURES:\n\
-                     • Read-only mode: When enabled, only SELECT/SHOW/DESCRIBE/EXPLAIN allowed\n\
-                     • Row limiting: Automatically applied if max_rows configured\n\
-                     • Transactions: Multi-statement queries execute in transaction for consistency\n\
-                     • NULL handling: NULL values returned as JSON null\n\n\
-                     EXAMPLES BY DATABASE:\n\
-                     • PostgreSQL: Supports CTEs, EXPLAIN ANALYZE, JSON types\n\
-                     • MySQL: Use SHOW TABLES, DESCRIBE table_name for schema\n\
-                     • SQLite: Use .schema or SELECT * FROM sqlite_master\n\n\
-                     BEST PRACTICES:\n\
-                     • Use LIMIT in SELECT queries to avoid large result sets\n\
-                     • Wrap multiple statements in explicit transaction for clarity\n\
-                     • Check row_count in response to verify operations\n\
-                     • Use schema tools (get_tables, get_table_schema) before querying",
-                ),
-            },
-        ])
-    }
 }

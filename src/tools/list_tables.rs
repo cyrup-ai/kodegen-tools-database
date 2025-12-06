@@ -1,10 +1,9 @@
 //! ListTables tool for database table exploration
 
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use kodegen_mcp_schema::{Tool, ToolExecutionContext, ToolResponse, McpError};
 use kodegen_mcp_schema::ToolArgs;
-use kodegen_mcp_schema::database::{ListTablesArgs, ListTablesPromptArgs, ListTablesOutput, TableInfo};
+use kodegen_mcp_schema::database::{ListTablesArgs, ListTablesOutput, TableInfo, ListTablesPrompts};
 use kodegen_config_manager::ConfigManager;
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use sqlx::{AnyPool, Row};
 use std::sync::Arc;
 use std::time::Duration;
@@ -49,7 +48,7 @@ impl ListTablesTool {
 
 impl Tool for ListTablesTool {
     type Args = ListTablesArgs;
-    type PromptArgs = ListTablesPromptArgs;
+    type Prompts = ListTablesPrompts;
 
     fn name() -> &'static str {
         kodegen_mcp_schema::database::DB_LIST_TABLES
@@ -140,72 +139,5 @@ impl Tool for ListTablesTool {
         };
         
         Ok(ToolResponse::new(display, output))
-    }
-
-    fn prompt_arguments() -> Vec<PromptArgument> {
-        vec![PromptArgument {
-            name: "database_type".to_string(),
-            title: None,
-            description: Some(
-                "Optional database system to focus examples on (e.g., 'PostgreSQL', 'MySQL', 'SQLite', 'SQL Server')"
-                    .to_string(),
-            ),
-            required: Some(false),
-        }]
-    }
-
-    async fn prompt(&self, _args: Self::PromptArgs) -> Result<Vec<PromptMessage>, McpError> {
-        Ok(vec![
-            PromptMessage {
-                role: PromptMessageRole::User,
-                content: PromptMessageContent::text(
-                    "How do I discover and list tables in different database schemas?",
-                ),
-            },
-            PromptMessage {
-                role: PromptMessageRole::Assistant,
-                content: PromptMessageContent::text(
-                    "Use the list_tables tool to discover available tables in your database:\n\n\
-                     **Basic usage**:\n\
-                     ```json\n\
-                     // List tables in default schema\n\
-                     list_tables({})\n\
-                     ```\n\n\
-                     **Database-specific defaults**:\n\
-                     - PostgreSQL: Uses 'public' schema\n\
-                     - MySQL/MariaDB: Uses current DATABASE()\n\
-                     - SQLite: Uses 'main' (only schema available)\n\
-                     - SQL Server: Uses 'dbo' schema\n\n\
-                     **Schema-specific queries**:\n\
-                     ```json\n\
-                     // PostgreSQL - query specific schema\n\
-                     list_tables({\"schema\": \"public\"})\n\
-                     list_tables({\"schema\": \"information_schema\"})\n\n\
-                     // MySQL - query different database\n\
-                     list_tables({\"schema\": \"mysql\"})\n\n\
-                     // SQL Server - query specific schema\n\
-                     list_tables({\"schema\": \"dbo\"})\n\
-                     list_tables({\"schema\": \"sys\"})\n\
-                     ```\n\n\
-                     **Response format**:\n\
-                     ```json\n\
-                     {\n\
-                       \"tables\": [\"users\", \"posts\", \"comments\"],\n\
-                       \"schema\": \"public\",\n\
-                       \"count\": 3\n\
-                     }\n\
-                     ```\n\n\
-                     **Common workflow**:\n\
-                     1. list_tables({}) - explore default schema tables\n\
-                     2. describe_table({\"table\": \"users\"}) - inspect table structure\n\
-                     3. execute_sql({\"sql\": \"SELECT ...\"}) - query the data\n\n\
-                     **Important notes**:\n\
-                     - Omitting schema parameter uses database's default (shown above)\n\
-                     - Schema names are case-sensitive in PostgreSQL, case-insensitive in MySQL\n\
-                     - System schemas (information_schema, sys) are queryable but contain metadata\n\
-                     - Response includes count for quick validation",
-                ),
-            },
-        ])
     }
 }

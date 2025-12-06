@@ -1,7 +1,7 @@
 //! Query timeout utilities for database operations
 
 use crate::error::DatabaseError;
-use kodegen_mcp_tool::error::McpError;
+use kodegen_mcp_schema::McpError;
 use kodegen_config_manager::ConfigManager;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -87,7 +87,7 @@ fn calculate_backoff(config: &ConfigManager, attempt: u32) -> Duration {
 /// # use kodegen_tools_database::tools::timeout::execute_with_timeout;
 /// # use kodegen_config_manager::ConfigManager;
 /// # use std::time::Duration;
-/// # async fn example() -> Result<(), kodegen_mcp_tool::error::McpError> {
+/// # async fn example() -> Result<(), kodegen_mcp_schema::McpError> {
 /// # let config_manager = ConfigManager::new();
 /// # let pool = ();  // Placeholder
 /// let result = execute_with_timeout(

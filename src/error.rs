@@ -1,6 +1,6 @@
 //! Error types for database operations
 
-use kodegen_mcp_tool::error::McpError;
+use kodegen_mcp_schema::McpError;
 use thiserror::Error;
 
 /// Database operation errors

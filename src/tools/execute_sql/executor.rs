@@ -6,7 +6,7 @@ use crate::{
     DatabaseType, tools::timeout::execute_with_timeout,
 };
 use super::row_converter::row_to_typed;
-use kodegen_mcp_tool::error::McpError;
+use kodegen_mcp_schema::McpError;
 use kodegen_config_manager::ConfigManager;
 use kodegen_mcp_schema::database::{ExecuteSQLOutput, SqlStatementError, SqlRow};
 use sqlx::{AnyPool, Row, Column};
