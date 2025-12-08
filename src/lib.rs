@@ -49,7 +49,7 @@ pub use validate::validate_sqlite_identifier;
 /// This function is non-blocking - the server runs in background tasks.
 ///
 /// # Arguments
-/// * `addr` - Socket address to bind to (e.g., "127.0.0.1:30446")
+/// * `addr` - Socket address to bind to (e.g., "127.0.0.1:30442")
 /// * `tls_cert` - Optional path to TLS certificate file
 /// * `tls_key` - Optional path to TLS private key file
 ///
@@ -64,116 +64,18 @@ pub async fn start_server(
     tls_cert: Option<std::path::PathBuf>,
     tls_key: Option<std::path::PathBuf>,
 ) -> anyhow::Result<kodegen_server_http::ServerHandle> {
-    use kodegen_server_http::{create_http_server, Managers, RouterSet, ShutdownHook, register_tool};
-    use kodegen_config_manager::ConfigManager;
-    use kodegen_utils::usage_tracker::UsageTracker;
-    use rmcp::handler::server::router::{prompt::PromptRouter, tool::ToolRouter};
-    use std::sync::Arc;
-    use std::time::Duration;
-    use tokio::sync::Mutex;
+    // Bind to the address first
+    let listener = tokio::net::TcpListener::bind(addr).await
+        .map_err(|e| anyhow::anyhow!("Failed to bind to {}: {}", addr, e))?;
 
+    // Convert separate cert/key into Option<(cert, key)> tuple
     let tls_config = match (tls_cert, tls_key) {
         (Some(cert), Some(key)) => Some((cert, key)),
         _ => None,
     };
 
-    let shutdown_timeout = Duration::from_secs(30);
-    let session_keep_alive = Duration::ZERO;
-
-    create_http_server("database", addr, tls_config, shutdown_timeout, session_keep_alive, |config: &ConfigManager, _tracker: &UsageTracker| {
-        let config = config.clone();
-        Box::pin(async move {
-            let mut tool_router = ToolRouter::new();
-            let mut prompt_router = PromptRouter::new();
-            let managers = Managers::new();
-
-            // Get DATABASE_DSN from environment (defaults to in-memory SQLite)
-            let dsn = std::env::var("DATABASE_DSN")
-                .unwrap_or_else(|_| {
-                    log::info!("DATABASE_DSN not set, defaulting to sqlite::memory:");
-                    "sqlite::memory:".to_string()
-                });
-
-            // Parse optional SSH tunnel configuration
-            let ssh_config = parse_ssh_config_from_env()?;
-
-            // Setup database connection pool (with optional SSH tunnel)
-            let db_connection = crate::setup_database_pool(&config, &dsn, ssh_config).await?;
-
-            // Register SSH tunnel for graceful shutdown if present
-            if db_connection.tunnel.is_some() {
-                let tunnel_guard = Arc::new(Mutex::new(db_connection.tunnel));
-
-                // Implement shutdown hook
-                struct TunnelGuard(Arc<Mutex<Option<crate::SSHTunnel>>>);
-                impl ShutdownHook for TunnelGuard {
-                    fn shutdown(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + '_>> {
-                        let guard = self.0.clone();
-                        Box::pin(async move {
-                            let mut tunnel_opt = guard.lock().await;
-                            if let Some(tunnel) = tunnel_opt.take() {
-                                log::info!("Closing SSH tunnel for database connection");
-                                tunnel.close().await;
-                            }
-                            Ok(())
-                        })
-                    }
-                }
-
-                managers.register(TunnelGuard(tunnel_guard)).await;
-            }
-
-            // Register all 7 database tools
-            use crate::tools::*;
-
-            let pool = db_connection.pool;
-            let connection_url = &db_connection.connection_url;
-
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                ExecuteSQLTool::new(pool.clone(), config.clone(), connection_url)?,
-            );
-
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                ListSchemasTool::new(pool.clone(), connection_url, config.clone())?,
-            );
-
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                ListTablesTool::new(pool.clone(), connection_url, config.clone())?,
-            );
-
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                GetTableSchemaTool::new(pool.clone(), connection_url, Arc::new(config.clone()))?,
-            );
-
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                GetTableIndexesTool::new(pool.clone(), connection_url, Arc::new(config.clone()))?,
-            );
-
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                GetStoredProceduresTool::new(pool.clone(), connection_url, Arc::new(config.clone()))?,
-            );
-
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                GetPoolStatsTool::new(pool.clone(), connection_url)?,
-            );
-
-            Ok(RouterSet::new(tool_router, prompt_router, managers))
-        })
-    }).await
+    // Delegate to start_server_with_listener
+    start_server_with_listener(listener, tls_config).await
 }
 
 /// Parse SSH configuration from environment variables
@@ -279,20 +181,18 @@ pub async fn start_server_with_listener(
     listener: tokio::net::TcpListener,
     tls_config: Option<(std::path::PathBuf, std::path::PathBuf)>,
 ) -> anyhow::Result<kodegen_server_http::ServerHandle> {
-    use kodegen_server_http::{create_http_server_with_listener, Managers, RouterSet, ShutdownHook, register_tool};
+    use kodegen_server_http::{ServerBuilder, Managers, RouterSet, ShutdownHook, register_tool};
     use kodegen_config_manager::ConfigManager;
-    use kodegen_utils::usage_tracker::UsageTracker;
     use rmcp::handler::server::router::{prompt::PromptRouter, tool::ToolRouter};
     use std::sync::Arc;
-    use std::time::Duration;
     use tokio::sync::Mutex;
 
-    let shutdown_timeout = Duration::from_secs(30);
-    let session_keep_alive = Duration::ZERO;
+    let mut builder = ServerBuilder::new()
+        .category(kodegen_config::CATEGORY_DATABASE)
+        .register_tools(|| async {
+            let config = ConfigManager::new();
+            config.init().await?;
 
-    create_http_server_with_listener("database", listener, tls_config, shutdown_timeout, session_keep_alive, |config: &ConfigManager, _tracker: &UsageTracker| {
-        let config = config.clone();
-        Box::pin(async move {
             let mut tool_router = ToolRouter::new();
             let mut prompt_router = PromptRouter::new();
             let managers = Managers::new();
@@ -383,5 +283,11 @@ pub async fn start_server_with_listener(
 
             Ok(RouterSet::new(tool_router, prompt_router, managers))
         })
-    }).await
+        .with_listener(listener);
+
+    if let Some((cert, key)) = tls_config {
+        builder = builder.with_tls_config(cert, key);
+    }
+
+    builder.serve().await
 }

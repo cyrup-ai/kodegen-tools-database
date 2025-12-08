@@ -1,13 +1,15 @@
 // Category HTTP Server: Database Tools
 //
 // This binary serves database query and schema exploration tools over HTTP/HTTPS transport.
-// Managed by kodegend daemon, typically running on port 30446.
+// Managed by kodegend daemon, typically running on port kodegen_config::PORT_DATABASE (30442).
 //
 // Optional: DATABASE_DSN environment variable (defaults to sqlite::memory:)
 // Optional: SSH_* environment variables for SSH tunnel support.
 
 use anyhow::{Result, Context};
-use kodegen_server_http::{run_http_server, Managers, RouterSet, ShutdownHook, register_tool};
+use kodegen_config::CATEGORY_DATABASE;
+use kodegen_config_manager::ConfigManager;
+use kodegen_server_http::{ServerBuilder, Managers, RouterSet, ShutdownHook, register_tool};
 use rmcp::handler::server::router::{prompt::PromptRouter, tool::ToolRouter};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -129,82 +131,86 @@ fn parse_ssh_config_from_env() -> Result<Option<(
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    run_http_server("database", |config, _tracker| {
-        let config = config.clone();
-        Box::pin(async move {
-        let mut tool_router = ToolRouter::new();
-        let mut prompt_router = PromptRouter::new();
-        let managers = Managers::new();
+    ServerBuilder::new()
+        .category(CATEGORY_DATABASE)
+        .register_tools(|| async {
+            // Initialize ConfigManager inside the closure
+            let config = ConfigManager::new();
+            config.init().await?;
 
-        // Get DATABASE_DSN from environment (defaults to SQLite in-memory)
-        let dsn = std::env::var("DATABASE_DSN")
-            .unwrap_or_else(|_| {
-                log::info!("DATABASE_DSN not set, defaulting to sqlite::memory:");
-                "sqlite::memory:".to_string()
-            });
+            let mut tool_router = ToolRouter::new();
+            let mut prompt_router = PromptRouter::new();
+            let managers = Managers::new();
 
-        // Parse optional SSH tunnel configuration
-        let ssh_config = parse_ssh_config_from_env()?;
+            // Get DATABASE_DSN from environment (defaults to SQLite in-memory)
+            let dsn = std::env::var("DATABASE_DSN")
+                .unwrap_or_else(|_| {
+                    log::info!("DATABASE_DSN not set, defaulting to sqlite::memory:");
+                    "sqlite::memory:".to_string()
+                });
 
-        // Setup database connection pool (with optional SSH tunnel)
-        let db_connection = kodegen_tools_database::setup_database_pool(&config, &dsn, ssh_config).await?;
+            // Parse optional SSH tunnel configuration
+            let ssh_config = parse_ssh_config_from_env()?;
 
-        // Register SSH tunnel for graceful shutdown if present
-        if db_connection.tunnel.is_some() {
-            let tunnel_guard = Arc::new(Mutex::new(db_connection.tunnel));
-            managers.register(TunnelGuard(tunnel_guard)).await;
-        }
+            // Setup database connection pool (with optional SSH tunnel)
+            let db_connection = kodegen_tools_database::setup_database_pool(&config, &dsn, ssh_config).await?;
 
-        // Register all 7 database tools
-        use kodegen_tools_database::tools::*;
+            // Register SSH tunnel for graceful shutdown if present
+            if db_connection.tunnel.is_some() {
+                let tunnel_guard = Arc::new(Mutex::new(db_connection.tunnel));
+                managers.register(TunnelGuard(tunnel_guard)).await;
+            }
 
-        let pool = db_connection.pool;
-        let connection_url = &db_connection.connection_url;
+            // Register all 7 database tools
+            use kodegen_tools_database::tools::*;
 
-        (tool_router, prompt_router) = register_tool(
-            tool_router,
-            prompt_router,
-            ExecuteSQLTool::new(pool.clone(), config.clone(), connection_url)?,
-        );
+            let pool = db_connection.pool;
+            let connection_url = &db_connection.connection_url;
 
-        (tool_router, prompt_router) = register_tool(
-            tool_router,
-            prompt_router,
-            ListSchemasTool::new(pool.clone(), connection_url, config.clone())?,
-        );
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                ExecuteSQLTool::new(pool.clone(), config.clone(), connection_url)?,
+            );
 
-        (tool_router, prompt_router) = register_tool(
-            tool_router,
-            prompt_router,
-            ListTablesTool::new(pool.clone(), connection_url, config.clone())?,
-        );
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                ListSchemasTool::new(pool.clone(), connection_url, config.clone())?,
+            );
 
-        (tool_router, prompt_router) = register_tool(
-            tool_router,
-            prompt_router,
-            GetTableSchemaTool::new(pool.clone(), connection_url, Arc::new(config.clone()))?,
-        );
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                ListTablesTool::new(pool.clone(), connection_url, config.clone())?,
+            );
 
-        (tool_router, prompt_router) = register_tool(
-            tool_router,
-            prompt_router,
-            GetTableIndexesTool::new(pool.clone(), connection_url, Arc::new(config.clone()))?,
-        );
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                GetTableSchemaTool::new(pool.clone(), connection_url, Arc::new(config.clone()))?,
+            );
 
-        (tool_router, prompt_router) = register_tool(
-            tool_router,
-            prompt_router,
-            GetStoredProceduresTool::new(pool.clone(), connection_url, Arc::new(config.clone()))?,
-        );
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                GetTableIndexesTool::new(pool.clone(), connection_url, Arc::new(config.clone()))?,
+            );
 
-        (tool_router, prompt_router) = register_tool(
-            tool_router,
-            prompt_router,
-            GetPoolStatsTool::new(pool.clone(), connection_url)?,
-        );
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                GetStoredProceduresTool::new(pool.clone(), connection_url, Arc::new(config.clone()))?,
+            );
 
-        Ok(RouterSet::new(tool_router, prompt_router, managers))
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                GetPoolStatsTool::new(pool.clone(), connection_url)?,
+            );
+
+            Ok(RouterSet::new(tool_router, prompt_router, managers))
         })
-    })
-    .await
+        .run()
+        .await
 }
