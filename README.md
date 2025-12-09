@@ -11,7 +11,7 @@ Part of [KODEGEN.ᴀɪ](https://github.com/cyrup-ai/kodegen) - A Rust-native MCP
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
 
-## Features
+## Features 
 
 - 🚀 **Multi-Database Support** - PostgreSQL, MySQL, MariaDB, SQLite with unified interface
 - 🔒 **SSH Tunnel Support** - Secure connections through bastion hosts
