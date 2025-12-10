@@ -134,7 +134,7 @@ impl Tool for GetStoredProceduresTool {
 
         // Human-readable display
         let display = format!(
-            "\x1b[36m󰞔 Stored Procedures: {}\x1b[0m\n ℹ Total: {} · Schema: {}",
+            "\x1b[36mStored Procedures: {}\x1b[0m\n ℹ Total: {} · Schema: {}",
             schema,
             procedures.len(),
             schema

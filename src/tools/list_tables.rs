@@ -117,7 +117,7 @@ impl Tool for ListTablesTool {
 
         // Human-readable display
         let display = format!(
-            "\x1b[36m󰓅 Tables: {}\x1b[0m\n 󰈙 Total: {} · Schema: {}",
+            "\x1b[36mTables: {}\x1b[0m\n ℹ Total: {} · Schema: {}",
             resolved_schema,
             tables.len(),
             resolved_schema
